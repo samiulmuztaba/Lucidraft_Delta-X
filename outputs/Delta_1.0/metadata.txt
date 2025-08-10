@@ -1,0 +1,4 @@
+Name: Delta
+Version: 1.0
+Design Notes: Triangle shaped, sharp edges
+Path to Picture: outputs/Delta_1.0/model_picture.jpg
