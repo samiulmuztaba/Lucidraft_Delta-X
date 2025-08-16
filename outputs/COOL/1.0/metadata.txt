@@ -1,0 +1,3 @@
+Model Name: COOL
+Version: 1.0
+Design Notes: i am nothing but cool

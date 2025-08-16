@@ -5,6 +5,8 @@ import shutil
 import numpy as np
 import csv
 import matplotlib.pyplot as plt
+from tabulate import tabulate
+import datetime
 
 init(autoreset=True)
 
@@ -326,8 +328,157 @@ def log_new_model(model_name=None, model_version=1.0):
     plt.close()
     print(f"{G}📉 Trajectory Graph saved to → {trajectory_graph_path}")
 
+    # Generate enhanced Markdown report with UTF-8 encoding
+    report_path = os.path.join(outputs_dir, 'report.md')
+    try:
+        with open(report_path, 'w', encoding='utf-8') as f:
+            # Header
+            f.write(f'# ✈️ {model_name} v{model_version} Engineering Flight Report\n\n')
+            f.write(f'Generated for [Your Research Team] on {datetime.datetime.now().strftime("%B %d, %Y, %I:%M %p +06")}\n\n')
+            f.write('Evaluated for aerodynamic performance and design optimization.\n\n')
+
+            # Overview
+            f.write('## Overview\n')
+            f.write(f'- **Model**: {model_name}\n')
+            f.write(f'- **Version**: {model_version}\n')
+            f.write(f'- **Design Notes**: {design_notes}\n')
+            f.write(f'- **Created**: {datetime.datetime.now().strftime("%Y-%m-%d %I:%M %p +06")}\n\n')
+
+            # Visuals
+            f.write('## Visuals\n')
+            if os.path.exists(os.path.join(outputs_dir, 'model_picture.jpg')):
+                f.write('![Model Design](model_picture.jpg)\n')
+            else:
+                f.write('Model image not found—add to document design!\n')
+            if os.path.exists(os.path.join(outputs_dir, 'trajectory_graph.png')):
+                f.write('![Flight Trajectory](trajectory_graph.png)\n')
+            else:
+                f.write('Trajectory graph not generated!\n')
+            f.write('\n')
+
+            # Average Metrics
+            avg_metrics = {}
+            metrics_path = os.path.join(outputs_dir, 'avg_metrics.csv')
+            if os.path.exists(metrics_path):
+                with open(metrics_path, 'r', encoding='utf-8') as mf:
+                    reader = csv.DictReader(mf)
+                    for row in reader:
+                        avg_metrics = {
+                            'Distance': float(row['Distance_px']),
+                            'Airtime': float(row['Airtime_s']),
+                            'Speed': float(row['Speed_px_per_s']),
+                            'Stability': float(row['Stability'])
+                        }
+                f.write('## Average Metrics\n')
+                f.write('| Metric    | Value      |\n')
+                f.write('|--|--|\n')
+                for metric, value in avg_metrics.items():
+                    f.write(f'| {metric} | {value:.2f} {"px" if metric == "Distance" else "s" if metric == "Airtime" else "px/s" if metric == "Speed" else ""} |\n')
+                
+                # Check for achievement (compare to other versions)
+                model_dir = os.path.join('outputs', model_name)
+                max_distance = avg_metrics['Distance']
+                is_best_distance = True
+                if os.path.exists(model_dir):
+                    for version in os.listdir(model_dir):
+                        if version != str(model_version) and os.path.isdir(os.path.join(model_dir, version)):
+                            v_metrics_path = os.path.join(model_dir, version, 'avg_metrics.csv')
+                            if os.path.exists(v_metrics_path):
+                                with open(v_metrics_path, 'r', encoding='utf-8') as vf:
+                                    reader = csv.DictReader(vf)
+                                    for row in reader:
+                                        if float(row['Distance_px']) > max_distance:
+                                            is_best_distance = False
+                                            break
+                if is_best_distance and avg_metrics:
+                    f.write('\n**🏆 Achievement**: Best distance in test series!\n')
+            else:
+                f.write('## Average Metrics\n')
+                f.write('No flight data recorded! Conduct tests, engineer! ✈️\n')
+            f.write('\n')
+
+            # Per-Video Analysis
+            video_metrics = []
+            flight_metrics_dir = os.path.join(outputs_dir, 'Flight Metrics')
+            if os.path.exists(flight_metrics_dir) and os.listdir(flight_metrics_dir):
+                for video_file in os.listdir(flight_metrics_dir):
+                    if video_file.endswith('_metrics.csv'):
+                        video_name = video_file.replace('_metrics.csv', '')
+                        with open(os.path.join(flight_metrics_dir, video_file), 'r', encoding='utf-8') as vf:
+                            reader = csv.DictReader(vf)
+                            for row in reader:
+                                video_metrics.append({
+                                    'Video Name': video_name,
+                                    'Distance': float(row['Distance_px']),
+                                    'Airtime': float(row['Airtime_s']),
+                                    'Speed': float(row['Speed_px_per_s']),
+                                    'Stability': float(row['Stability']),
+                                    'Performance Note': ''
+                                })
+                # Tag performance notes
+                if video_metrics:
+                    max_distance = max(vm['Distance'] for vm in video_metrics)
+                    max_stability = max(vm['Stability'] for vm in video_metrics)
+                    for vm in video_metrics:
+                        if vm['Distance'] == max_distance:
+                            vm['Performance Note'] = 'Longest flight'
+                        elif vm['Stability'] == max_stability:
+                            vm['Performance Note'] = 'Most stable'
+                    # Calculate standard deviations
+                    distances = [vm['Distance'] for vm in video_metrics]
+                    stabilities = [vm['Stability'] for vm in video_metrics]
+                    std_distance = np.std(distances) if len(distances) > 1 else 0.0
+                    std_stability = np.std(stabilities) if len(stabilities) > 1 else 0.0
+                    f.write('## Per-Video Analysis\n')
+                    f.write('| Video Name | Distance (px) | Airtime (s) | Speed (px/s) | Stability | Performance Note |\n')
+                    f.write('|--|--|--|--|--|--|\n')
+                    for vm in video_metrics:
+                        f.write(f"| {vm['Video Name']} | {vm['Distance']:.2f} | {vm['Airtime']:.2f} | {vm['Speed']:.2f} | {vm['Stability']:.2f} | {vm['Performance Note']} |\n")
+                    f.write(f'\n**Stats**: Standard Deviation: Distance: {std_distance:.2f}px, Stability: {std_stability:.2f} ({"highly consistent" if std_distance < 10 else "variable"})\n')
+            else:
+                f.write('## Per-Video Analysis\n')
+                f.write('No flight data recorded! Conduct tests, engineer! ✈️\n')
+            f.write('\n')
+
+            # Research Insights
+            f.write('## Research Insights\n')
+            if avg_metrics:
+                # Compare to previous versions
+                prev_distance = None
+                if os.path.exists(model_dir):
+                    for version in os.listdir(model_dir):
+                        if version != str(model_version) and os.path.isdir(os.path.join(model_dir, version)):
+                            v_metrics_path = os.path.join(model_dir, version, 'avg_metrics.csv')
+                            if os.path.exists(v_metrics_path):
+                                with open(v_metrics_path, 'r', encoding='utf-8') as vf:
+                                    reader = csv.DictReader(vf)
+                                    for row in reader:
+                                        prev_distance = float(row['Distance_px'])
+                                        break
+                                break
+                if prev_distance is not None:
+                    percent_change = ((avg_metrics['Distance'] - prev_distance) / prev_distance * 100) if prev_distance != 0 else 0
+                    f.write(f"- **Distance**: {'Up' if percent_change > 0 else 'Down'} {abs(percent_change):.1f}% from v{version} ({prev_distance:.2f}px), indicating {'improved' if percent_change > 0 else 'reduced'} glide efficiency\n")
+                f.write(f"- **Stability**: {avg_metrics['Stability']:.1f}/10, {'excellent' if avg_metrics['Stability'] > 8 else 'good' if avg_metrics['Stability'] > 6 else 'needs work'} for controlled flights\n")
+                airtime = avg_metrics['Airtime']
+                recommendation = f"Airtime {airtime:.1f}s < 4s target—try lighter paper or sharper wings" if airtime < 4 else "Solid airtime—test with varied wind conditions"
+                f.write(f"- **Recommendation**: {recommendation}\n")
+                f.write(f"- **Note**: {'Consistent' if std_distance < 10 else 'Variable'} metrics suggest {'reliability' if std_distance < 10 else 'need for design tweaks'} for further testing\n")
+            else:
+                f.write('- No insights available—log flight data to analyze! ✈️\n')
+            f.write('\n')
+
+            # Social Prompt
+            f.write('**Share your findings on X with #LucidraftDeltaX to discuss with the research community! 🚀**\n')
+
+        print(f"{G}📄 Report saved to → {report_path}")
+    except Exception as e:
+        print(f"{R}❌ Turbulence! Failed to generate report: {e}. Check files and try again! ✈️")
+
+
     return model_name, model_version
 
+# =================== Update Model ======================
 def get_prev_v(model_name):
     model_path = os.path.join('outputs', model_name)
     if not os.path.exists(model_path):
@@ -341,10 +492,12 @@ def get_prev_v(model_name):
 def update_model():
     model_name = input(f'\n{Y}Please enter the name of the model you want to update: ')
     prev_version = get_prev_v(model_name)
+    new_version = round(prev_version + 0.1, 1)
     if not prev_version:
         print(f'{R}⚠ No models found! Please first create one, then update if needed')
     else:
-        log_new_model(model_name, round(prev_version + 0.1, 1))
+        log_new_model(model_name, new_version)
+        compare(model_name, prev_version, model_name, new_version)
 
 def compare(model_name1=None, model1_v=None, model_name2=None, model2_v=None):
 
@@ -366,7 +519,7 @@ def compare(model_name1=None, model1_v=None, model_name2=None, model2_v=None):
             model2_speed = float(row["Speed_px_per_s"])
             model2_stability = float(row['Stability'])
 
-    print(f"\n{B}⚖ Comparing {model_name1}_v{model1_v} to {model_name2}_v{model2_v}\n")
+    print(f"\n{B}⚖ Comparing {model_name2}_v{model2_v} to {model_name1}_v{model1_v}\n")
     distance_gap = model2_distance - model1_distance
     stability_gap = model2_stability - model1_stability
     speed_gap = model2_speed - model1_speed
@@ -377,7 +530,79 @@ def compare(model_name1=None, model1_v=None, model_name2=None, model2_v=None):
     print(f'{Y} Distance: {get_sign(distance_gap)}{distance_gap}')
     print(f'{Y} Stability: {get_sign(stability_gap)}{stability_gap}')
     print(f'{Y} Speed: {get_sign(speed_gap)}{speed_gap}')
+
+
+
+# ================= Model view ========================
+def create_combined_table(data):
+    """
+    Generates a single ASCII table with model names as internal headers.
+    """
+    all_data = []
+
+    # Check if data is empty before trying to access it
+    if not data:
+        return "No data to display."
+        
+    # Get the column headers from the first entry to ensure consistency
+    first_model = list(data.keys())[0]
+    # Check if the first model has any versions before trying to access them
+    if not data[first_model]:
+        return "No version data to display."
     
+    headers = list(data[first_model][0].keys())
+
+    for model_name, versions in data.items():
+        if not versions:
+            continue  # Skip models with no version data
+            
+        # Add the model name as a list with a blank for each column
+        all_data.append([model_name] + [''] * (len(headers) - 1))
+        
+        # Add the column headers for the version data
+        all_data.append(headers)
+        
+        # Add the data rows
+        for version in versions:
+            all_data.append(list(version.values()))
+
+    # Generate the table with an empty list for headers to avoid the TypeError
+    return tabulate(all_data, headers=[], tablefmt="grid")
+
+
+def view_models():
+    outb = 'outputs'
+    models = {}  
+
+    if not os.path.exists(outb):
+        print(R + "❌ No models found! Create some planes first! ✈️")
+        return models  # Return an empty dict if no models exist
+
+    for model_name in os.listdir(outb):
+        model_path = f'{outb}/{model_name}'
+
+        if os.path.isdir(model_path):
+            # Initialize the list for the current model *before* the inner loop
+            models[model_name] = [] 
+            
+            for version in os.listdir(model_path):
+                version_path = f'{model_path}/{version}/avg_metrics.csv'
+                
+                # Check if the metrics file exists before trying to open it
+                if os.path.exists(version_path):
+                    with open(version_path, 'r') as f:
+                        reader = csv.DictReader(f)
+                        
+                        for row in reader:
+                            # Append a new dictionary to the list for this model
+                            models[model_name].append({
+                                'version': str(version),
+                                'distance': str(row['Distance_px']),
+                                'speed': str(row['Speed_px_per_s']),
+                                'stability': str(row['Stability'])
+                            })
+                            
+    print(create_combined_table(models))
 
 
 def pause():
