@@ -749,7 +749,7 @@ def generate_overall():
             if os.path.exists(report_path):
                 f.write(f"- [{record['Model']} v{record['Version']} Detailed Report]({record['Model']}/{record['Version']}/report.md)\n")
         f.write("\n---\n\n")
-        f.write("Share this on X with**#LucidraftDeltaX ** \n")
+        f.write("Share this on X with **#LucidraftDeltaX** \n")
     print(G + f"📄 Markdown report saved to → {report_file}")
 
     # Social prompt
