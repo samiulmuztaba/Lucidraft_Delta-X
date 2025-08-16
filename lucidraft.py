@@ -657,12 +657,13 @@ if __name__ == "__main__":
         elif choice == "2":
             update_model()
         elif choice == "3":
+            view_models()
             pause()
         elif choice == "4":
             compare()
             pause()
         elif choice == "5":
-
+            print('Hold tight, coming soon!')
             pause()
         else:
             pause()
