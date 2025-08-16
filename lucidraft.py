@@ -5,10 +5,11 @@ import shutil
 import numpy as np
 import csv
 import matplotlib.pyplot as plt
+import pandas as pd
 from tabulate import tabulate
-import datetime
+from datetime import datetime
 
-init(autoreset=True)
+init(autoreset=True) # after each prompt, go back to homepage
 
 # Colors
 C = Fore.CYAN + Style.BRIGHT
@@ -19,7 +20,7 @@ G = Fore.GREEN + Style.BRIGHT
 R = Fore.RED + Style.BRIGHT
 M = Fore.MAGENTA + Style.BRIGHT
 
-
+# ==== Main Homepage ====
 def banner():
     logo = f"""
 {C}   ╔══════════════════════════════════════════════╗
@@ -41,17 +42,19 @@ def homepage():
     print(C + "─" * 50)
     return input(Y + "Select an option (1-6): " + W).strip()
 
-
+# ===== Log New Model =====
 def log_new_model(model_name=None, model_version=1.0):
     need = "Add" if not model_name else 'Update'
-    print(C + f"\n--- {need} New Model ---\n")
+    print(C + f"\n--- {need} New Model ---\n") # state management like react? 🤪
+
+    # ---- Take important inputs ------
     if not model_name:
         model_name = input(Y + "✈  Model Name: " + W).strip()
-    # model_version = 1.0
 
     outputs_dir = os.path.join("outputs", model_name, str(model_version))
     os.makedirs(outputs_dir, exist_ok=True)
 
+    # picture input with validation
     in_picture_path = input(Y + "🖼  Model's Picture: " + W).strip()
     picture_path = os.path.join(outputs_dir, "model_picture.jpg")
 
@@ -69,6 +72,7 @@ def log_new_model(model_name=None, model_version=1.0):
             cv.imwrite(picture_path, cv.imread(retry_path))
             print(G + f"\n✅ Picture saved → {picture_path}")
 
+    # video input with validation
     in_videos_path = input(Y + "🎥 Flight Videos (comma separated): " + W).strip()
     videos_dir = os.path.join(outputs_dir, "Flight Videos")
     os.makedirs(videos_dir, exist_ok=True)
@@ -85,9 +89,11 @@ def log_new_model(model_name=None, model_version=1.0):
             print(f"{R}❌ Video not found: {video_path}")
             return None
 
-    preview_mode = True
+    preview_mode = False # toggle this if u want to also watch the videos
     design_notes = input(Y + "📝 Design Notes: " + W).strip()
 
+    # ------ Save datas ------
+    # Save Metrics
     metadata_path = os.path.join(outputs_dir, "metadata.txt")
     with open(metadata_path, "w") as f:
         f.write(f"Model Name: {model_name}\n")
@@ -95,11 +101,12 @@ def log_new_model(model_name=None, model_version=1.0):
         f.write(f"Design Notes: {design_notes}\n")
     print(f"{Fore.CYAN}{Style.BRIGHT}📓 Metadata Saved to {metadata_path}")
 
+    # per video processing
     for video_path in video_paths:
         distance_px = 0
         trajectory_points = []
         frame_count = 0
-        first_detected = None
+        first_detected = None # these are for accurate airtime
         last_detected = None
 
         video_n = os.path.basename(video_path)[:-4]
@@ -111,6 +118,7 @@ def log_new_model(model_name=None, model_version=1.0):
         fps = cap.get(cv.CAP_PROP_FPS) if cap.get(cv.CAP_PROP_FPS) > 0 else 30
 
         while True:
+            # detect the plane and draw trajectory line live and also draw a box around it with label
             ret, frame = cap.read()
             if not ret:
                 break
@@ -178,6 +186,7 @@ def log_new_model(model_name=None, model_version=1.0):
         if preview_mode:
             cv.destroyAllWindows()
 
+        # Save the coordinates
         coordinates_path_f = os.path.join(
             outputs_dir, "Flight Coordinates", f"{video_n}_coordinates.csv"
         )
@@ -189,23 +198,27 @@ def log_new_model(model_name=None, model_version=1.0):
                 writer.writerow([x, y])
         print(f"{G}📈 Flight Trajectory Coordinates saved to {coordinates_path_f}")
 
+        # Save the metrics
         if trajectory_points:
             distance_px = max(x for x, y in trajectory_points) - min(
                 x for x, y in trajectory_points
-            )
+            ) # horizontal distance
         else:
             distance_px = 0
 
         if first_detected is not None and last_detected is not None:
             airtime_frames = last_detected - first_detected + 1
-            airtime = airtime_frames / fps
+            airtime = airtime_frames / fps # see, we used that vars for acc airtime :)
         else:
             airtime = 0
 
         speed = distance_px / airtime if airtime > 0 else 0
 
+        # Take the stability score as input from user
         print(f"{C}📝 Enter stability score for {model_name} (1-10): ", end="")
-        stability_score = input().strip()
+        stability_score = int(input().strip())
+        if stability_score > 10:
+            print(f"We understand you might be amused of it's stability, bro just go with 10 if you like it then!")
 
         metrics_path_f = os.path.join(
             outputs_dir, "Flight Metrics", f"{video_n}_metrics.csv"
@@ -224,6 +237,8 @@ def log_new_model(model_name=None, model_version=1.0):
             )
         print(f"{B}📐 Metrics saved to {metrics_path_f}\n")
 
+    # ---- Averages -----
+    # Metrics
     tot_distance = tot_airtime = tot_speed = tot_stability = 0
     metrics_path = os.path.join(outputs_dir, "Flight Metrics")
     mfile_count = 0
@@ -260,6 +275,7 @@ def log_new_model(model_name=None, model_version=1.0):
         )
     print(f"{G}💾 Average metrics of {model_name} saved to {avg_metrics_path}")
 
+    # Coords
     coordinates_path = os.path.join(outputs_dir, "Flight Coordinates")
     avg_coordinates_path = os.path.join(outputs_dir, "avg_coordinates.csv")
     all_trajectories = []
@@ -292,6 +308,7 @@ def log_new_model(model_name=None, model_version=1.0):
             writer.writerow([f"{x:.2f}", f"{y:.2f}"])
     print(f"{G}💾 Average Coordinates of {model_name} saved to {avg_coordinates_path}")
 
+    # -------- Make the Trajectory Graphs
     plt.figure(figsize=(8, 6))
     if os.path.exists(coordinates_path):
         for filename in os.listdir(coordinates_path):
@@ -333,29 +350,29 @@ def log_new_model(model_name=None, model_version=1.0):
     try:
         with open(report_path, 'w', encoding='utf-8') as f:
             # Header
-            f.write(f'# ✈️ {model_name} v{model_version} Engineering Flight Report\n\n')
-            f.write(f'Generated for [Your Research Team] on {datetime.datetime.now().strftime("%B %d, %Y, %I:%M %p +06")}\n\n')
-            f.write('Evaluated for aerodynamic performance and design optimization.\n\n')
+            f.write(f'# ✈️ {model_name} v{model_version} Flight Report\n\n')
 
             # Overview
             f.write('## Overview\n')
+            if os.path.exists(os.path.join(outputs_dir, 'model_picture.jpg')):
+                f.write('![Model Design](model_picture.jpg)\n')
+            else:
+                f.write('Model image not found—add to document design!\n')
             f.write(f'- **Model**: {model_name}\n')
             f.write(f'- **Version**: {model_version}\n')
             f.write(f'- **Design Notes**: {design_notes}\n')
             f.write(f'- **Created**: {datetime.datetime.now().strftime("%Y-%m-%d %I:%M %p +06")}\n\n')
 
-            # Visuals
-            f.write('## Visuals\n')
-            if os.path.exists(os.path.join(outputs_dir, 'model_picture.jpg')):
-                f.write('![Model Design](model_picture.jpg)\n')
-            else:
-                f.write('Model image not found—add to document design!\n')
+            # Trajectory Graph
+            f.write('## Trajectory Graph\n')
             if os.path.exists(os.path.join(outputs_dir, 'trajectory_graph.png')):
                 f.write('![Flight Trajectory](trajectory_graph.png)\n')
             else:
                 f.write('Trajectory graph not generated!\n')
             f.write('\n')
 
+            is_best_distance = True
+            is_most_stable = False
             # Average Metrics
             avg_metrics = {}
             metrics_path = os.path.join(outputs_dir, 'avg_metrics.csv')
@@ -378,7 +395,6 @@ def log_new_model(model_name=None, model_version=1.0):
                 # Check for achievement (compare to other versions)
                 model_dir = os.path.join('outputs', model_name)
                 max_distance = avg_metrics['Distance']
-                is_best_distance = True
                 if os.path.exists(model_dir):
                     for version in os.listdir(model_dir):
                         if version != str(model_version) and os.path.isdir(os.path.join(model_dir, version)):
@@ -390,8 +406,6 @@ def log_new_model(model_name=None, model_version=1.0):
                                         if float(row['Distance_px']) > max_distance:
                                             is_best_distance = False
                                             break
-                if is_best_distance and avg_metrics:
-                    f.write('\n**🏆 Achievement**: Best distance in test series!\n')
             else:
                 f.write('## Average Metrics\n')
                 f.write('No flight data recorded! Conduct tests, engineer! ✈️\n')
@@ -423,57 +437,26 @@ def log_new_model(model_name=None, model_version=1.0):
                         if vm['Distance'] == max_distance:
                             vm['Performance Note'] = 'Longest flight'
                         elif vm['Stability'] == max_stability:
+                            is_most_stable = True
                             vm['Performance Note'] = 'Most stable'
-                    # Calculate standard deviations
-                    distances = [vm['Distance'] for vm in video_metrics]
-                    stabilities = [vm['Stability'] for vm in video_metrics]
-                    std_distance = np.std(distances) if len(distances) > 1 else 0.0
-                    std_stability = np.std(stabilities) if len(stabilities) > 1 else 0.0
-                    f.write('## Per-Video Analysis\n')
-                    f.write('| Video Name | Distance (px) | Airtime (s) | Speed (px/s) | Stability | Performance Note |\n')
-                    f.write('|--|--|--|--|--|--|\n')
-                    for vm in video_metrics:
-                        f.write(f"| {vm['Video Name']} | {vm['Distance']:.2f} | {vm['Airtime']:.2f} | {vm['Speed']:.2f} | {vm['Stability']:.2f} | {vm['Performance Note']} |\n")
-                    f.write(f'\n**Stats**: Standard Deviation: Distance: {std_distance:.2f}px, Stability: {std_stability:.2f} ({"highly consistent" if std_distance < 10 else "variable"})\n')
+                   
             else:
                 f.write('## Per-Video Analysis\n')
                 f.write('No flight data recorded! Conduct tests, engineer! ✈️\n')
             f.write('\n')
 
-            # Research Insights
-            f.write('## Research Insights\n')
-            if avg_metrics:
-                # Compare to previous versions
-                prev_distance = None
-                if os.path.exists(model_dir):
-                    for version in os.listdir(model_dir):
-                        if version != str(model_version) and os.path.isdir(os.path.join(model_dir, version)):
-                            v_metrics_path = os.path.join(model_dir, version, 'avg_metrics.csv')
-                            if os.path.exists(v_metrics_path):
-                                with open(v_metrics_path, 'r', encoding='utf-8') as vf:
-                                    reader = csv.DictReader(vf)
-                                    for row in reader:
-                                        prev_distance = float(row['Distance_px'])
-                                        break
-                                break
-                if prev_distance is not None:
-                    percent_change = ((avg_metrics['Distance'] - prev_distance) / prev_distance * 100) if prev_distance != 0 else 0
-                    f.write(f"- **Distance**: {'Up' if percent_change > 0 else 'Down'} {abs(percent_change):.1f}% from v{version} ({prev_distance:.2f}px), indicating {'improved' if percent_change > 0 else 'reduced'} glide efficiency\n")
-                f.write(f"- **Stability**: {avg_metrics['Stability']:.1f}/10, {'excellent' if avg_metrics['Stability'] > 8 else 'good' if avg_metrics['Stability'] > 6 else 'needs work'} for controlled flights\n")
-                airtime = avg_metrics['Airtime']
-                recommendation = f"Airtime {airtime:.1f}s < 4s target—try lighter paper or sharper wings" if airtime < 4 else "Solid airtime—test with varied wind conditions"
-                f.write(f"- **Recommendation**: {recommendation}\n")
-                f.write(f"- **Note**: {'Consistent' if std_distance < 10 else 'Variable'} metrics suggest {'reliability' if std_distance < 10 else 'need for design tweaks'} for further testing\n")
-            else:
-                f.write('- No insights available—log flight data to analyze! ✈️\n')
-            f.write('\n')
-
+            # Summary   
+            f.write('## Summary\n')
+            f.write(f'- {("Satisfictory distance" if is_best_distance else "Great Distance coverage" if distance_px > 770 else "The distance is not satisfying!")}\n')
+            f.write(f'- {'Really Stable' if is_most_stable else 'Strong stability' if stability_score > 7 else 'fairly stable' if stability_score > 5 else 'Unacceptably Bad stablity, Please consider optimal weight distribution and add dihedral'}')           
             # Social Prompt
+            f.write('\n---\n')
             f.write('**Share your findings on X with #LucidraftDeltaX to discuss with the research community! 🚀**\n')
 
         print(f"{G}📄 Report saved to → {report_path}")
     except Exception as e:
         print(f"{R}❌ Turbulence! Failed to generate report: {e}. Check files and try again! ✈️")
+    print(f'✈ {model_name} v{model_version} --> {distance_px}px, {speed}px/s, {stability_score}')
 
 
     return model_name, model_version
@@ -605,35 +588,205 @@ def view_models():
     print(create_combined_table(models))
 
 
+# ============== Generate Overall Report =====================
+def generate_overall():
+    """
+    Generate an overall report summarizing all models' metrics.
+    Creates a terminal table, CSV, bar chart, and Markdown report for research papers.
+    Matches the specified research-paper-ready format with detailed insights.
+    """
+    base_dir = "outputs"
+    report_file = os.path.join(base_dir, "overall_report.md")
+    csv_file = os.path.join(base_dir, "overall_report.csv")
+    chart_file = os.path.join(base_dir, "overall_report.png")
+
+    # Collect data
+    records = []
+    if not os.path.exists(base_dir):
+        print(R + "❌ Hangar’s empty! Fold some planes, pilot! ✈️")
+        return
+
+    for model in os.listdir(base_dir):
+        model_path = os.path.join(base_dir, model)
+        if not os.path.isdir(model_path):
+            continue
+        for version in os.listdir(model_path):
+            csv_path = os.path.join(model_path, version, "avg_metrics.csv")
+            if os.path.exists(csv_path):
+                try:
+                    with open(csv_path, "r", encoding="utf-8") as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            records.append({
+                                "Model": model,
+                                "Version": version,
+                                "Distance_px": float(row["Distance_px"]),
+                                "Stability": float(row["Stability"]),
+                                "Speed_px_per_s": float(row["Speed_px_per_s"])
+                            })
+                except Exception as e:
+                    print(R + f"❌ Crash landing! Bad metrics file at {csv_path}. Try option 1! ✈️")
+
+    if not records:
+        print(R + "❌ No metrics found! Create models with option 1, ace! ✈️")
+        return
+
+    # Sort by Distance_px, Stability, Speed_px_per_s (descending)
+    records.sort(key=lambda x: (x["Distance_px"], x["Stability"], x["Speed_px_per_s"]), reverse=True)
+
+    # Prepare table data with ★ for top 3
+    table_data = []
+    for i, record in enumerate(records):
+        model_name = f"★ {record['Model']}" if i < 3 else record["Model"]
+        table_data.append([
+            model_name,
+            record["Version"],
+            record["Distance_px"],
+            record["Stability"],
+            record["Speed_px_per_s"]
+        ])
+
+    # Terminal table
+    print(C + "✈️ Lucid Raft Delta-X: Fleet Performance Report ✈️")
+    print(C + "─" * 50)
+    print(tabulate(
+        table_data,
+        headers=["Model", "Version", "Distance (px)", "Stability", "Speed (px/s)"],
+        tablefmt="grid",
+        floatfmt=".2f"
+    ))
+    print(Y + "Top 3 planes marked with ★! Great flying, pilots!")
+
+    # Save CSV
+    os.makedirs(base_dir, exist_ok=True)
+    with open(csv_file, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["Model", "Version", "Distance_px", "Stability", "Speed_px_per_s"])
+        writer.writeheader()
+        for record in records:
+            writer.writerow({
+                "Model": record["Model"],
+                "Version": record["Version"],
+                "Distance_px": f"{record['Distance_px']:.2f}",
+                "Stability": f"{record['Stability']:.2f}",
+                "Speed_px_per_s": f"{record['Speed_px_per_s']:.2f}"
+            })
+    print(G + f"📊 Overall report saved to → {csv_file}")
+
+    # Bar chart for distance
+    plt.figure(figsize=(8, 6))
+    labels = [f"{r['Model']}_v{r['Version']}" for r in records]
+    distances = [r["Distance_px"] for r in records]
+    plt.bar(labels, distances, color="#00FFFF")
+    plt.title("Fleet Distance Comparison")
+    plt.xlabel("Model and Version")
+    plt.ylabel("Distance (px)")
+    plt.grid(True, linestyle="--", alpha=0.3)
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.savefig(chart_file)
+    plt.close()
+    print(G + f"📉 Chart saved to → {chart_file}")
+
+    # Markdown report
+    now = datetime.now().strftime("%Y-%m-%d %I:%M %p +06")
+    with open(report_file, "w", encoding="utf-8") as f:
+        f.write(f"# Overall Report\n")
+        f.write(f"*Phase Summary of Paper Aircraft Engineering Iterations*  \n")
+        f.write(f"Generated: {now}  \n\n")
+        f.write("---\n\n")
+        f.write("## 🚀 Models & Versions Overview (Sorted by Distance → Stability → Speed)\n\n")
+        f.write("| Model | Version | Avg Distance (px) | Avg Stability | Avg Speed (px/s) |\n")
+        f.write("|-------|---------|-------------------|---------------|------------------|\n")
+        for i, record in enumerate(records):
+            model_name = f"★ {record['Model']}" if i < 3 else record["Model"]
+            f.write(f"| {model_name} | {record['Version']} | {record['Distance_px']:.2f} | {record['Stability']:.2f} | {record['Speed_px_per_s']:.2f} |\n")
+        f.write("\n---\n\n")
+        f.write("## 🏆 Top Performers\n")
+        best_distance = max(records, key=lambda x: x["Distance_px"])
+        best_stability = max(records, key=lambda x: x["Stability"])
+        best_speed = max(records, key=lambda x: x["Speed_px_per_s"])
+        f.write(f"- **Longest Distance** → {best_distance['Model']} v{best_distance['Version']} ({best_distance['Distance_px']:.2f} px) ✅\n")
+        f.write(f"- **Most Stable** → {best_stability['Model']} v{best_stability['Version']} ({best_stability['Stability']:.2f})\n")
+        f.write(f"- **Fastest Speed** → {best_speed['Model']} v{best_speed['Version']} ({best_speed['Speed_px_per_s']:.2f} px/s)\n\n")
+        f.write("---\n\n")
+        f.write("## 📈 Comparative Trends\n\n")
+        f.write("### Distance Progression\n")
+        for model in set(r["Model"] for r in records):
+            model_records = [r for r in records if r["Model"] == model]
+            if len(model_records) > 1:
+                versions = sorted(model_records, key=lambda x: float(x["Version"]))
+                diff = versions[0]["Distance_px"] - versions[-1]["Distance_px"]
+                f.write(f"- {model} branch {'dominates with consistent gains' if diff > 0 else 'shows modest progress' if diff > -50 else 'stagnated'} ({'+' if diff > 0 else ''}{diff:.1f} px from v{versions[-1]['Version']} → v{versions[0]['Version']}).\n")
+            else:
+                f.write(f"- {model} branch has single version, no progression data.\n")
+        f.write("\n### Stability vs Distance\n")
+        best = records[0]
+        f.write(f"- **Best Stability Plane** → {best_stability['Model']} v{best_stability['Version']} ({best_stability['Stability']:.2f})\n")
+        f.write(f"- **Best Distance Plane** → {best_distance['Model']} v{best_distance['Version']} ({best_distance['Distance_px']:.2f} px)\n")
+        f.write(f"- Clear correlation: distance and stability peaked together in {best['Model']} branch.\n\n")
+        f.write(f"![Fleet Distance Comparison](overall_report.png)\n\n")
+        f.write("---\n\n")
+        f.write("## 🔬 Insights\n")
+        f.write(f"- **{best['Model']} branch** = king. Strong lead in distance, stability, and speed.\n")
+        if len(records) > 1:
+            second = records[1]
+            f.write(f"- **{second['Model']} branch** = decent, but already lagging too far behind.\n")
+        if len(records) > 2:
+            worst = records[-1]
+            f.write(f"- **{worst['Model']} branch** = inefficient — cut losses here.\n")
+        f.write("- Micro-fold adjustments (seen in top performers) yield massive improvements.\n\n")
+        f.write("---\n\n")
+        f.write("## 📌 Phase Verdict\n")
+        f.write(f"- **Total Models**: {len(set(r['Model'] for r in records))}\n")
+        f.write(f"- **Total Versions Tested**: {len(records)}\n")
+        f.write(f"- **Best Candidate:** {best['Model']} v{best['Version']}\n")
+        f.write(f"- **Recommendation:** Keep pushing the *{best['Model']}* branch. {second['Model'] if len(records) > 1 else 'Other models'} can stay archived for reference. {worst['Model'] if len(records) > 2 else 'Underperforming models'} should be abandoned.\n")
+        f.write(f"- If you go way more → {best['Model']} could become the city-burner model. 🔥\n\n")
+        f.write("---\n\n")
+        f.write("## 📎 Appendices\n")
+        for record in records:
+            report_path = f"outputs/{record['Model']}/{record['Version']}/report.md"
+            if os.path.exists(report_path):
+                f.write(f"- [{record['Model']} v{record['Version']} Detailed Report]({record['Model']}/{record['Version']}/report.md)\n")
+        f.write("\n---\n\n")
+        f.write("Share this on X with**#LucidraftDeltaX ** \n")
+    print(G + f"📄 Markdown report saved to → {report_file}")
+
+    # Social prompt
+    print(Y + "🚀 Share your fleet’s stats on X with #LucidraftDeltaX! Show the world your top planes! ✈️")
+
 def pause():
     input(W + "\nPress Enter to return to the homepage...")
 
-
+# ===== Basic Utility Funcs Used For video processing
 def draw_rectangle(img, x, y, w, h):
-    glow_color = (0, 255, 255)
+    color = (0, 255, 255)
     thickness = 2
     length = 20
     corners = [
-        ((x, y), (x + length, y), (x, y + length)),
-        ((x + w, y), (x + w - length, y), (x + w, y + length)),
-        ((x, y + h), (x + length, y + h), (x, y + h - length)),
-        ((x + w, y + h), (x + w - length, y + h), (x + w, y + h - length)),
+        ((x, y), (x + length, y), (x, y + length)), # top-left
+        ((x + w, y), (x + w - length, y), (x + w, y + length)), # top-right
+        ((x, y + h), (x + length, y + h), (x, y + h - length)), # bot-left
+        ((x + w, y + h), (x + w - length, y + h), (x + w, y + h - length)), # bot-right
     ]
+    # Draw the rectangle
     for pt1, pt2, pt3 in corners:
-        cv.line(img, pt1, pt2, glow_color, thickness)
-        cv.line(img, pt1, pt3, glow_color, thickness)
-    cv.line(img, (x, y), (x + w, y + h), glow_color, thickness)
-    cv.line(img, (x + w, y), (x, y + h), glow_color, thickness)
+        cv.line(img, pt1, pt2, color, thickness)
+        cv.line(img, pt1, pt3, color, thickness)
+
+    # Draw a circle and cross
+    cv.line(img, (x, y), (x + w, y + h), color, thickness)
+    cv.line(img, (x + w, y), (x, y + h), color, thickness)
     center = (x + w // 2, y + h // 2)
     for i in range(6, 0, -1):
         alpha = 0.1 * i
         overlay = img.copy()
-        cv.circle(overlay, center, i * 3, glow_color, -1)
+        cv.circle(overlay, center, i * 3, color, -1)
         cv.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
-    cv.circle(img, center, 4, glow_color, -1)
+    cv.circle(img, center, 4, color, -1)
 
 
-def draw_grid(img, spacing=60, color=(0, 255, 255), thickness=1, alpha=0.1):
+def draw_grid(img, spacing=60, color=(0, 255, 255), thickness=1, alpha=0.1): # Just draws a grid on the video to make it cool, maybe 🤷‍♂️
     overlay = img.copy()
     h, w = img.shape[:2]
     for x in range(0, w, spacing):
@@ -642,7 +795,7 @@ def draw_grid(img, spacing=60, color=(0, 255, 255), thickness=1, alpha=0.1):
         cv.line(overlay, (0, y), (w, y), color, thickness)
     cv.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
 
-
+# RUN!
 if __name__ == "__main__":
     while True:
         choice = homepage()
@@ -663,7 +816,7 @@ if __name__ == "__main__":
             compare()
             pause()
         elif choice == "5":
-            print('Hold tight, coming soon!')
+            generate_overall()
             pause()
         else:
             pause()
