@@ -1,6 +1,6 @@
 # Lucid Raft Delta-X
 
-![Lucid Raft Delta-X Banner](https://via.placeholder.com/800x200.png?text=Lucid+Raft+Delta-X)
+![Lucid Raft Delta-X Banner](assets/banner.png)
 
 **Lucid Raft Delta-X** is an advanced command-line tool for paper plane enthusiasts and engineers to log, analyze, and compare flight performance of paper aircraft models. It processes flight videos to extract metrics like distance, airtime, speed, and stability, generating detailed reports and visualizations for research and optimization. Built with Python, it leverages OpenCV for video analysis, Matplotlib for plotting, and Pandas for data handling, all wrapped in a colorful CLI interface powered by Colorama.
 
