@@ -87,9 +87,18 @@
 
 ## Video Processing Notes
 
-- **Trajectory Tracking**: The script uses OpenCV to detect the paper plane in videos based on HSV color range (`[35, 50, 102]` to `[179, 255, 255]`) and contour area (>500 pixels). Adjust these values in `log_new_model()` if your plane’s color or video conditions differ.
-- **Metrics Calculation**: Distance (pixels), airtime (seconds), speed (pixels/second), and user-provided stability scores are computed and saved.
-- **Visualization**: Trajectories are plotted with Matplotlib, showing individual flights (cyan) and average trajectory (red).
+- **Trajectory Tracking**: The script uses OpenCV to detect the paper plane in videos based on HSV color range (`[35, 50, 102]` to `[179, 255, 255]`) and contour area (>500 pixels).  
+  ⚠️ **Important:** By default, the system only tracks planes made with **blue paper**, and there must be **no other blue objects in the background**. To track planes of a different color, modify the `lower` and `upper` HSV values in the `log_new_model()` function to match your plane’s color.  
+
+- **Metrics Calculation**: Distance (pixels), airtime (seconds), speed (pixels/second), and user-provided stability scores are computed and saved.  
+
+- **Visualization**: Trajectories are plotted with Matplotlib, showing individual flights (cyan) and average trajectory (red).  
+
+- **Tips for Accurate Tracking**:
+  - Use a **plain, non-blue background**.
+  - Ensure your plane’s **color is distinct** from any background objects.  
+  - Test with short video clips first to adjust HSV thresholds if needed.
+
 
 ## Contributing
 
