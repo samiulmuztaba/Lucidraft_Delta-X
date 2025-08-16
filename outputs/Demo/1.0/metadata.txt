@@ -1,3 +1,0 @@
-Model Name: Demo
-Version: 1.0
-Design Notes: jsalfalskdf;l

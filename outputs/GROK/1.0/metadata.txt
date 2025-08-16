@@ -1,3 +1,0 @@
-Model Name: GROK
-Version: 1.0
-Design Notes: something
