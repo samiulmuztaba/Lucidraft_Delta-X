@@ -1,0 +1,6 @@
+opencv-python
+colorama
+numpy
+pandas
+matplotlib
+tabulate
