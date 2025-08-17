@@ -10,6 +10,7 @@ from tabulate import tabulate
 from datetime import datetime
 
 init(autoreset=True) # after each prompt, go back to homepage
+init(convert=True, strip=False)
 
 # Colors
 C = Fore.CYAN + Style.BRIGHT
@@ -89,7 +90,7 @@ def log_new_model(model_name=None, model_version=1.0):
             print(f"{R}❌ Video not found: {video_path}")
             return None
 
-    preview_mode = False # toggle this if u want to also watch the videos
+    preview_mode = True # toggle this if u want to also watch the videos
     design_notes = input(Y + "📝 Design Notes: " + W).strip()
 
     # ------ Save datas ------
@@ -218,7 +219,7 @@ def log_new_model(model_name=None, model_version=1.0):
         print(f"{C}📝 Enter stability score for {model_name} (1-10): ", end="")
         stability_score = int(input().strip())
         if stability_score > 10:
-            print(f"We understand you might be amused of it's stability, bro just go with 10 if you like it then!")
+            print(f"{M} We understand you might be amused of it's stability, bro just go with 10 if you like it then! the good news though, you don't have to because we will count it as 10")
 
         metrics_path_f = os.path.join(
             outputs_dir, "Flight Metrics", f"{video_n}_metrics.csv"
@@ -361,7 +362,7 @@ def log_new_model(model_name=None, model_version=1.0):
             f.write(f'- **Model**: {model_name}\n')
             f.write(f'- **Version**: {model_version}\n')
             f.write(f'- **Design Notes**: {design_notes}\n')
-            f.write(f'- **Created**: {datetime.datetime.now().strftime("%Y-%m-%d %I:%M %p +06")}\n\n')
+            f.write(f'- **Created**: {datetime.now().strftime("%Y-%m-%d %I:%M %p +06")}\n\n')
 
             # Trajectory Graph
             f.write('## Trajectory Graph\n')
@@ -456,7 +457,7 @@ def log_new_model(model_name=None, model_version=1.0):
         print(f"{G}📄 Report saved to → {report_path}")
     except Exception as e:
         print(f"{R}❌ Turbulence! Failed to generate report: {e}. Check files and try again! ✈️")
-    print(f'✈ {model_name} v{model_version} --> {distance_px}px, {speed}px/s, {stability_score}')
+    print(f'{B}✈  {model_name} v{model_version} --> {distance_px}px, {speed}px/s, {stability_score}')
 
 
     return model_name, model_version
@@ -585,7 +586,7 @@ def view_models():
                                 'stability': str(row['Stability'])
                             })
                             
-    print(create_combined_table(models))
+    print(B + create_combined_table(models))
 
 
 # ============== Generate Overall Report =====================

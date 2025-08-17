@@ -20,3 +20,6 @@ grok_mod.py
 lal.md 
 test.py
 cg_recs.md
+build/
+dist/
+

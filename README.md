@@ -27,30 +27,17 @@
 
 ## Installation
 
-1. **Clone the Repository** (if hosted on a git platform):
-   ```bash
-   git clone https://github.com/yourusername/lucidraft-delta-x.git
-   cd lucidraft-delta-x
-   ```
+1. **Download exe file from [here](https://github.com/samiulmuztaba/Lucidraft_Delta-X/releases/tag/src)**
 
-2. **Install Dependencies**:
-   Create a virtual environment (optional but recommended) and install the required packages:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install opencv-python colorama numpy matplotlib pandas tabulate
-   ```
-
-3. **Prepare Input Files**:
+2. **Prepare Input Files**:
    - Ensure you have flight videos (e.g., `.mp4`) and model images (e.g., `.jpg`) ready for analysis.
    - Videos should capture the paper plane in flight with a clear, contrasting background for accurate tracking.
 
 ## Usage
 
 1. **Run the Program**:
-   ```bash
-   python lucidraft_delta_x.py
-   ```
+   - Run the exe file 
+   - It is important to note that emojis and better colors may not display properly when run in the command prompt. Therefore, it is recommended to use bash, zsh, or other modern terminals.Please note that it won't show emojis and better colors if ran in cmd. So, consider running in bash, zsh or other modern terminals
 
 2. **Navigate the CLI**:
    The program presents a menu with six options:
