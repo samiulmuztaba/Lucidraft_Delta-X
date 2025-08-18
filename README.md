@@ -23,7 +23,8 @@
   - `numpy` (for numerical operations)
   - `matplotlib` (for plotting trajectories and charts)
   - `pandas` (for data handling)
-  - `tabulate` (for ASCII table generation)
+  - `tabulate` (for ASCII table generation) <br>
+  > But.....This is only required if you want to run it like `python lucidraft.py`
 
 ## Installation
 
