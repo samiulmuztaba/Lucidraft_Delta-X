@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from tabulate import tabulate
 from datetime import datetime
+import re
 
 init(autoreset=True) # after each prompt, go back to homepage
 init(convert=True, strip=False)
@@ -21,7 +22,6 @@ G = Fore.GREEN + Style.BRIGHT
 R = Fore.RED + Style.BRIGHT
 M = Fore.MAGENTA + Style.BRIGHT
 
-
 # ==== Main Homepage ====
 def banner():
     logo = f"""
@@ -32,15 +32,30 @@ def banner():
 """
     print(logo)
 
+def pause():
+    input(W + "\nPress any key to return to the homepage...")
+
+breakw = False
+rerun_req = 'please try to run the program again!'
+
 # Setup
 # Input for real world metrics
 ref_obj_m = None
 ref_obj_px = None
 if not ref_obj_px and not ref_obj_m:
-    print(f'{B}\nBefore we begin, I need to know the px per meter for the video. For this, Measure an object in the video and then measer its length in pixels so that we can give you distance\n in meters rather than in pixels (required!)')
-    ref_obj_m = float(input(f'{Y}📏 Length of reference object in meters (e.g., 1.0 for a 1-meter stick): ').strip())
-    ref_obj_px = float(input(f'{Y}👾 Pixel length of reference object in video (e.g., 100.0 pixels): ').strip())
-    px_per_m = float(ref_obj_px / ref_obj_m)
+    print(f'{B}\nBefore we begin, I need to know the px per meter for the video. For this, Measure an object in the video and then measer its length in pixels so that we can give you distance\nin meters rather than in pixels (required!)')
+    while True:
+        try:
+            ref_obj_m = float(input(f'{Y}📏 Length of reference object in meters (e.g., 1.0 for a 1-meter stick): {W}').strip())
+            ref_obj_px = float(input(f'{Y}👾 Pixel length of reference object in video (e.g., 100.0 pixels): {W}').strip())
+            if ref_obj_m <= 0 or ref_obj_px <= 0:
+                print(f'{R}⚠ Values must be positive numbers, {rerun_req}')
+                continue
+            px_per_m = float(ref_obj_px / ref_obj_m)
+            print(f'\n{G}🤗 We are done, thanks for your patience!')
+            break
+        except ValueError:
+            print(f'{R}⚠ Please provide inputs as numbers, {rerun_req}')
 
 def homepage():
     banner()
@@ -56,20 +71,43 @@ def homepage():
 
 # ===== Log New Model =====
 def log_new_model(model_name=None, model_version=1.0):
+    global breakw
     need = "Add" if not model_name else 'Update'
     print(C + f"\n--- {need} New Model ---\n") # state management like react? 🤪
 
     # ---- Take important inputs ------
     if not model_name:
         model_name = input(Y + "✈  Model Name: " + W).strip()
-
+        if not model_name or not re.match(r'^[a-zA-Z0-9_-]+$', model_name):
+            model_name = input(f'{R}⚠ Please provide a valid name (alphanumeric, underscores, or hyphens only): {W}').strip()
+            if not model_name or not re.match(r'^[a-zA-Z0-9_-]+$', model_name):
+                print(f'{R}🤦 You entered wrong name again! {rerun_req}')
+                return None
+    
     outputs_dir = os.path.join("outputs", model_name, str(model_version))
-    os.makedirs(outputs_dir, exist_ok=True)
+    if os.path.exists(outputs_dir):
+        while True:
+            con = input(f'{M}Seems like a model named {model_name} already exists, do you want to change it?(y/N): {W}').strip().lower()
+            if con == 'y':
+                os.makedirs(outputs_dir, exist_ok=True)
+                break
+            elif con == 'n':
+                model_name = input(f'{Y}✒ Enter a different model name: {W}').strip()
+                if not model_name or not re.match(r'^[a-zA-Z0-9_-]+$', model_name):
+                    print(f'{R}🤦 Invalid name! {rerun_req}')
+                    return None
+                outputs_dir = os.path.join("outputs", model_name, str(model_version))
+                break
+            else:
+                print(f'{Y}❌ Please enter y or n, {rerun_req}')
+
+    def path_validation_msg():
+        print(f'{R}⚠  Dude, will you never provide a valid path?')
 
     # picture input with validation
     in_picture_path = input(Y + "🖼  Model's Picture: " + W).strip()
     picture_path = os.path.join(outputs_dir, "model_picture.jpg")
-
+    os.makedirs(os.path.dirname(picture_path), exist_ok=True)
     if os.path.exists(in_picture_path):
         img = cv.imread(in_picture_path)
         if img is not None:
@@ -77,13 +115,34 @@ def log_new_model(model_name=None, model_version=1.0):
             print(G + f"\n✅ Picture saved → {picture_path}")
         else:
             print(R + f"\n❌ Error: Could not read image from '{in_picture_path}'")
+            retry_path = input(f"{Y}📷 Please enter a valid picture path: {W}").strip()
+            if os.path.exists(retry_path):
+                img = cv.imread(retry_path)
+                if img is not None:
+                    cv.imwrite(picture_path, img)
+                    print(G + f"\n✅ Picture saved → {picture_path}")
+                else:
+                    print(R + f"\n❌ Error: Could not read image from '{retry_path}'")
+                    path_validation_msg()
+                    return None
+            else:
+                path_validation_msg()
+                return None
     else:
         print(R + f"\n❌ Error: Image path '{in_picture_path}' does not exist.")
-        retry_path = input(f"{Y}📷 Please enter a valid picture path: ").strip()
+        retry_path = input(f"{Y}📷 Please enter a valid picture path: {W}").strip()
         if os.path.exists(retry_path):
-            cv.imwrite(picture_path, cv.imread(retry_path))
-            print(G + f"\n✅ Picture saved → {picture_path}")
-
+            img = cv.imread(retry_path)
+            if img is not None:
+                cv.imwrite(picture_path, img)
+                print(G + f"\n✅ Picture saved → {picture_path}")
+            else:
+                print(R + f"\n❌ Error: Could not read image from '{retry_path}'")
+                path_validation_msg()
+                return None
+        else:
+            path_validation_msg()
+            return None
     
     # video input with validation
     in_videos_path = input(Y + "🎥 Flight Videos (comma separated): " + W).strip()
@@ -93,16 +152,25 @@ def log_new_model(model_name=None, model_version=1.0):
     video_paths = (
         [v.strip() for v in in_videos_path.split(",")] if in_videos_path else []
     )
+    if not video_paths:
+        print(f"{R}❌ No video paths provided, {rerun_req}")
+        return None
 
     for video_path in video_paths:
-        if os.path.exists(video_path):
+        if os.path.exists(video_path) and video_path.lower().endswith(('.mp4', '.avi', '.mov')):
             shutil.copy(video_path, videos_dir)
             print(G + f"✅ Video copied: {video_path} → {videos_dir}")
         else:
-            print(f"{R}❌ Video not found: {video_path}")
-            return None
+            print(f"{R}❌ Invalid or unsupported video format: {video_path}")
+            retry_path = input(f"{Y}📹 Please enter a valid video path for {video_path}: {W}").strip()
+            if os.path.exists(retry_path) and retry_path.lower().endswith(('.mp4', '.avi', '.mov')):
+                shutil.copy(retry_path, videos_dir)
+                print(G + f"✅ Video copied: {retry_path} → {videos_dir}")
+            else:
+                print(f"{R}❌ Invalid or unsupported video format: {retry_path}")
+                return None
 
-    preview_mode = True # toggle this if u want to also watch the videos
+    preview_mode = True # toggle this if u don't want to watch the video, but note that it wil take the same amount of time!
     design_notes = input(Y + "📝 Design Notes: " + W).strip()
 
     # ------ Save datas ------
@@ -154,7 +222,12 @@ def log_new_model(model_name=None, model_version=1.0):
 
             for contour in contours:
                 area = cv.contourArea(contour)
+                plane_count = 0
                 if area > 500:
+                    if plane_count > 1:
+                        print(f'{R}⚠ More than one plane detected, please provide a video where there is only one blue object which is your plane, {rerun_req}')
+                        return None
+                    plane_count+=1
                     detected_this_frame = True
                     x, y, w, h = cv.boundingRect(contour)
                     center = (x + w // 2, y + h // 2)
@@ -199,6 +272,10 @@ def log_new_model(model_name=None, model_version=1.0):
         if preview_mode:
             cv.destroyAllWindows()
 
+        if not trajectory_points:
+            print(f'{R}⚠ No plane was detected, Please try to provide a video where you clearly show the plane and make sure that there is not another or more blue object(s), {rerun_req}')
+            return None
+        
         # Save the coordinates
         coordinates_path_f = os.path.join(
             outputs_dir, "Flight Coordinates", f"{video_n}_coordinates.csv"
@@ -230,10 +307,18 @@ def log_new_model(model_name=None, model_version=1.0):
         speed = distance_m / airtime if airtime > 0 else 0
 
         # Take the stability score as input from user
-        print(f"{C}📝 Enter stability score for {model_name} (1-10): ", end="")
-        stability_score = int(input().strip())
-        if stability_score > 10:
-            print(f"{M} We understand you might be amused of it's stability, bro just go with 10 if you like it then! the good news though, you don't have to because we will count it as 10")
+        try:
+            stability_score = int(input(f"{C}📝 Enter stability score for {model_name} (0-10): {W}").strip())
+            if stability_score > 10:
+                print(f"{M} We understand you might be amused of it's stability, bro just go with 10 if you like it then! the good news though, you don't have to because we will count it as 10")
+                stability_score = 10
+            elif stability_score < 0:
+                print(f'{M} Bruh, did that fly that bad? but you are only allowed to enter in range of 0 to 10. We will take that as 0, btw!')
+                stability_score = 0
+        except ValueError:
+            print(f'{R}⚠ Only integers between 0 and 10 allowed, {rerun_req}')
+            return None
+        
 
         metrics_path_f = os.path.join(
             outputs_dir, "Flight Metrics", f"{video_n}_metrics.csv"
@@ -262,14 +347,18 @@ def log_new_model(model_name=None, model_version=1.0):
         for filename in os.listdir(metrics_path):
             if filename.endswith("_metrics.csv"):
                 filepath = os.path.join(metrics_path, filename)
-                with open(filepath, "r", newline="") as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        tot_distance += float(row["Distance(m)"])
-                        tot_airtime += float(row["Airtime(s)"])
-                        tot_speed += float(row["Speed(m/s)"])
-                        tot_stability += float(row["Stability"])
-                        mfile_count += 1
+                try:
+                    with open(filepath, "r", encoding='utf-8') as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            tot_distance += float(row["Distance(m)"])
+                            tot_airtime += float(row["Airtime(s)"])
+                            tot_speed += float(row["Speed(m/s)"])
+                            tot_stability += float(row["Stability"])
+                            mfile_count += 1
+                except (csv.Error, KeyError, ValueError):
+                    print(f"{R}❌ Error reading metrics file {filepath}, {rerun_req}")
+                    return None
 
     avg_distance = tot_distance / mfile_count if mfile_count > 0 else 0
     avg_airtime = tot_airtime / mfile_count if mfile_count > 0 else 0
@@ -300,21 +389,29 @@ def log_new_model(model_name=None, model_version=1.0):
             if filename.endswith("_coordinates.csv"):
                 filepath = os.path.join(coordinates_path, filename)
                 points = []
-                with open(filepath, "r", newline="") as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        points.append((float(row["X"]), float(row["Y"])))
-                if points:
-                    all_trajectories.append(points)
+                try:
+                    with open(filepath, "r", encoding='utf-8') as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            points.append((float(row["X"]), float(row["Y"])))
+                    if points:
+                        all_trajectories.append(points)
+                except (csv.Error, KeyError, ValueError):
+                    print(f"{R}❌ Error reading coordinates file {filepath}, {rerun_req}")
+                    return None
 
     avg_points = []
     if all_trajectories:
-        min_length = min(len(traj) for traj in all_trajectories)
-        num_videos = len(all_trajectories)
-        for i in range(min_length):
-            avg_x = sum(traj[i][0] for traj in all_trajectories) / num_videos
-            avg_y = sum(traj[i][1] for traj in all_trajectories) / num_videos
-            avg_points.append((avg_x, avg_y))
+        try:
+            min_length = min(len(traj) for traj in all_trajectories)
+            num_videos = len(all_trajectories)
+            for i in range(min_length):
+                avg_x = sum(traj[i][0] for traj in all_trajectories) / num_videos
+                avg_y = sum(traj[i][1] for traj in all_trajectories) / num_videos
+                avg_points.append((avg_x, avg_y))
+        except ValueError:
+            print(f"{R}❌ No valid trajectories to average, {rerun_req}")
+            return None
 
     with open(avg_coordinates_path, "w", newline="") as f:
         writer = csv.writer(f)
@@ -330,12 +427,16 @@ def log_new_model(model_name=None, model_version=1.0):
             if filename.endswith("_coordinates.csv"):
                 filepath = os.path.join(coordinates_path, filename)
                 x_coords, y_coords = [], []
-                with open(filepath, "r", newline="") as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        x_coords.append(float(row["X"]))
-                        y_coords.append(float(row["Y"]))
-                plt.plot(x_coords, y_coords, color="cyan")
+                try:
+                    with open(filepath, "r", encoding='utf-8') as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            x_coords.append(float(row["X"]))
+                            y_coords.append(float(row["Y"]))
+                    plt.plot(x_coords, y_coords, color="cyan")
+                except (csv.Error, KeyError, ValueError):
+                    print(f"{R}❌ Error reading coordinates for graph {filepath}, {rerun_req}")
+                    return None
 
     if avg_points:
         avg_x_coords, avg_y_coords = zip(*avg_points)
@@ -393,35 +494,44 @@ def log_new_model(model_name=None, model_version=1.0):
             avg_metrics = {}
             metrics_path = os.path.join(outputs_dir, 'avg_metrics.csv')
             if os.path.exists(metrics_path):
-                with open(metrics_path, 'r', encoding='utf-8') as mf:
-                    reader = csv.DictReader(mf)
-                    for row in reader:
-                        avg_metrics = {
-                            'Distance': float(row['Distance(m)']),
-                            'Airtime': float(row['Airtime(s)']),
-                            'Speed': float(row['Speed(m/s)']),
-                            'Stability': float(row['Stability'])
-                        }
-                f.write('## Average Metrics\n')
-                f.write('| Metric    | Value      |\n')
-                f.write('|--|--|\n')
-                for metric, value in avg_metrics.items():
-                    f.write(f'| {metric} | {value:.2f} {"px" if metric == "Distance" else "s" if metric == "Airtime" else "px/s" if metric == "Speed" else ""} |\n')
+                try:
+                    with open(metrics_path, 'r', encoding='utf-8') as mf:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            avg_metrics = {
+                                'Distance': float(row['Distance(m)']),
+                                'Airtime': float(row['Airtime(s)']),
+                                'Speed': float(row['Speed(m/s)']),
+                                'Stability': float(row['Stability'])
+                            }
+                    f.write('## Average Metrics\n')
+                    f.write('| Metric    | Value      |\n')
+                    f.write('|--|--|\n')
+                    for metric, value in avg_metrics.items():
+                        f.write(f'| {metric} | {value:.2f} {"px" if metric == "Distance" else "s" if metric == "Airtime" else "px/s" if metric == "Speed" else ""} |\n')
                 
-                # Check for achievement (compare to other versions)
-                model_dir = os.path.join('outputs', model_name)
-                max_distance = avg_metrics['Distance']
-                if os.path.exists(model_dir):
-                    for version in os.listdir(model_dir):
-                        if version != str(model_version) and os.path.isdir(os.path.join(model_dir, version)):
-                            v_metrics_path = os.path.join(model_dir, version, 'avg_metrics.csv')
-                            if os.path.exists(v_metrics_path):
-                                with open(v_metrics_path, 'r', encoding='utf-8') as vf:
-                                    reader = csv.DictReader(vf)
-                                    for row in reader:
-                                        if float(row['Distance(m)']) > max_distance:
-                                            is_best_distance = False
-                                            break
+                    # Check for achievement (compare to other versions)
+                    model_dir = os.path.join('outputs', model_name)
+                    max_distance = avg_metrics['Distance']
+                    if os.path.exists(model_dir):
+                        for version in os.listdir(model_dir):
+                            if version != str(model_version) and os.path.isdir(os.path.join(model_dir, version)):
+                                v_metrics_path = os.path.join(model_dir, version, 'avg_metrics.csv')
+                                if os.path.exists(v_metrics_path):
+                                    try:
+                                        with open(v_metrics_path, 'r', encoding='utf-8') as vf:
+                                            reader = csv.DictReader(vf)
+                                            for row in reader:
+                                                if float(row['Distance(m)']) > max_distance:
+                                                    is_best_distance = False
+                                                    break
+                                    except (csv.Error, KeyError, ValueError):
+                                        print(f"{R}❌ Error reading metrics for comparison {v_metrics_path}, {rerun_req}")
+                                        return None
+                except (csv.Error, KeyError, ValueError):
+                    f.write('## Average Metrics\n')
+                    f.write('No flight data recorded! Conduct tests, engineer! ✈️\n')
+                    return None
             else:
                 f.write('## Average Metrics\n')
                 f.write('No flight data recorded! Conduct tests, engineer! ✈️\n')
@@ -434,27 +544,31 @@ def log_new_model(model_name=None, model_version=1.0):
                 for video_file in os.listdir(flight_metrics_dir):
                     if video_file.endswith('_metrics.csv'):
                         video_name = video_file.replace('_metrics.csv', '')
-                        with open(os.path.join(flight_metrics_dir, video_file), 'r', encoding='utf-8') as vf:
-                            reader = csv.DictReader(vf)
-                            for row in reader:
-                                video_metrics.append({
-                                    'Video Name': video_name,
-                                    'Distance': float(row['Distance(m)']),
-                                    'Airtime': float(row['Airtime(s)']),
-                                    'Speed': float(row['Speed(m/s)']),
-                                    'Stability': float(row['Stability']),
-                                    'Performance Note': ''
-                                })
-                # Tag performance notes
-                if video_metrics:
-                    max_distance = max(vm['Distance'] for vm in video_metrics)
-                    max_stability = max(vm['Stability'] for vm in video_metrics)
-                    for vm in video_metrics:
-                        if vm['Distance'] == max_distance:
-                            vm['Performance Note'] = 'Longest flight'
-                        elif vm['Stability'] == max_stability:
-                            is_most_stable = True
-                            vm['Performance Note'] = 'Most stable'
+                        try:
+                            with open(os.path.join(flight_metrics_dir, video_file), 'r', encoding='utf-8') as vf:
+                                reader = csv.DictReader(vf)
+                                for row in reader:
+                                    video_metrics.append({
+                                        'Video Name': video_name,
+                                        'Distance': float(row['Distance(m)']),
+                                        'Airtime': float(row['Airtime(s)']),
+                                        'Speed': float(row['Speed(m/s)']),
+                                        'Stability': float(row['Stability']),
+                                        'Performance Note': ''
+                                    })
+                            # Tag performance notes
+                            if video_metrics:
+                                max_distance = max(vm['Distance'] for vm in video_metrics)
+                                max_stability = max(vm['Stability'] for vm in video_metrics)
+                                for vm in video_metrics:
+                                    if vm['Distance'] == max_distance:
+                                        vm['Performance Note'] = 'Longest flight'
+                                    elif vm['Stability'] == max_stability:
+                                        is_most_stable = True
+                                        vm['Performance Note'] = 'Most stable'
+                        except (csv.Error, KeyError, ValueError):
+                            print(f"{R}❌ Error reading video metrics {video_file}, {rerun_req}")
+                            return None
                    
             else:
                 f.write('## Per-Video Analysis\n')
@@ -464,7 +578,7 @@ def log_new_model(model_name=None, model_version=1.0):
             # Summary   
             f.write('## Summary\n')
             f.write(f'- {("Satisfictory distance" if is_best_distance else "Great Distance coverage" if distance_px > 770 else "The distance is not satisfying!")}\n')
-            f.write(f'- {'Really Stable' if is_most_stable else 'Strong stability' if stability_score > 7 else 'fairly stable' if stability_score > 5 else 'Unacceptably Bad stablity, Please consider optimal weight distribution and add dihedral'}')           
+            f.write(f'- {"Really Stable" if is_most_stable else "Strong stability" if stability_score > 7 else "fairly stable" if stability_score > 5 else "Unacceptably Bad stablity, Please consider optimal weight distribution and add dihedral"}')           
             # Social Prompt
             f.write('\n---\n')
             f.write('**Share your findings on X with #LucidraftDeltaX to discuss with the research community! 🚀**\n')
@@ -475,7 +589,6 @@ def log_new_model(model_name=None, model_version=1.0):
 
     # one-liner
     print(f'{B}✈  {model_name} v{model_version} --> {distance_m}m, {speed}m/s, {stability_score}')
-
 
     return model_name, model_version
 
@@ -535,87 +648,140 @@ def view_models():
                 
                 # Check if the metrics file exists before trying to open it
                 if os.path.exists(version_path):
-                    with open(version_path, 'r') as f:
-                        reader = csv.DictReader(f)
-                        
-                        for row in reader:
-                            # Append a new dictionary to the list for this model
+                    try:
+                        with open(version_path, 'r', encoding='utf-8') as f:
+                            reader = csv.DictReader(f)
+                            row = next(reader, None)
+                            if row is None or any(k not in row for k in ["Distance(m)", "Speed(m/s)", "Stability"]):
+                                print(f"{R}❌ Invalid metrics file {version_path}, {rerun_req}")
+                                continue
                             models[model_name].append({
                                 'version': str(version),
                                 'distance': str(row['Distance(m)']),
                                 'speed': str(row['Speed(m/s)']),
                                 'stability': str(row['Stability'])
                             })
+                    except (csv.Error, KeyError, ValueError):
+                        print(f"{R}❌ Error reading metrics file {version_path}, {rerun_req}")
+                        continue
                             
-    print(B + create_combined_table(models))
+    table = create_combined_table(models)
+    if table == "No data to display." or table == "No version data to display.":
+        print(R + f"❌ {table} Create some planes first! ✈️")
+    else:
+        print(B + table)
+    return models
 
 # =================== Update Model ======================
+def update_model():
+    model_name = input(f'\n{Y}Model Name: {W}').strip()
+    if not model_name or not re.match(r'^[a-zA-Z0-9_-]+$', model_name):
+        print(f'{R}⚠ Invalid model name! Use alphanumeric, underscores, or hyphens, {rerun_req}')
+        return
+    if not os.path.exists(f'outputs/{model_name}'):
+        print(f'{R}⚠ No models found! Please first create one, then update if needed')
+        return
+    try:
+        prev_version = get_prev_v(model_name)
+        if prev_version is None:
+            print(f'{R}⚠ No valid versions found for {model_name}, {rerun_req}')
+            return
+        new_version = round(prev_version + 0.1, 1)
+        log_new_model(model_name, new_version)
+        compare(model_name, prev_version, model_name, new_version)
+    except ValueError:
+        print(f'{R}⚠ Invalid version format in {model_name} directory, {rerun_req}')
+
 def get_prev_v(model_name):
     model_path = os.path.join('outputs', model_name)
     if not os.path.exists(model_path):
         return None
     vs = []
     for v in os.listdir(model_path):
-        vs.append(float(v))
-    
-    return max(vs)
-
-def update_model():
-    model_name = input(f'\n{Y}Model Name: ')
-    prev_version = get_prev_v(model_name)
-    new_version = round(prev_version + 0.1, 1)
-    if not prev_version:
-        print(f'{R}⚠ No models found! Please first create one, then update if needed')
-    else:
-        log_new_model(model_name, new_version)
-        compare(model_name, prev_version, model_name, new_version)
+        try:
+            vs.append(float(v))
+        except ValueError:
+            continue
+    return max(vs) if vs else None
 
 # ===================== Delete Model =============
 def delete_model():
-    mv = input(f'\n{Y}Model name(include version with a space after model if you want a specific version to be deleted): ')
-    model = mv.split(' ')[0]
+    mv = input(f'\n{Y}Model name(include version with a space after model if you want a specific version to be deleted): {W}').strip()
+    if mv:
+        model = mv.split(' ')[0] 
+    else:
+        print(f'{Y} Invalid input! {rerun_req}')
+        return None
     version = None
-    if len(mv.split(' ')) >= 2 and len(mv.split(' ')) < 3:
-        version = mv.split(' ')[1]
-    elif len(mv.split(' ')) >= 3:
-        print(f'{R} Please first enter the model name and if you want to delete just one version of that model, just add space after the model name and write down the version in float\n. Multiple version deletion is not supported!')
-    
-    shutil.rmtree(f'outputs/{model}/{version if version else ''}')
-    print(f'{G}Successfully removed {model} {version if version else ''}!')
+    try:
+        if len(mv.split(' ')) >= 2 and len(mv.split(' ')) < 3:
+            version = mv.split(' ')[1]
+        elif len(mv.split(' ')) >= 3:
+            print(f'{R} Please first enter the model name and if you want to delete just one version of that model, just add space after the model name and write down the version in float\n. Multiple version deletion is not supported!')
+        
+        shutil.rmtree(f'outputs/{model}/{version if version else ''}')
+        print(f'{G}Successfully removed {model} {version if version else ''}!')
+    except:
+        print(f"{R}⚠ Please give input in valid format, the model name only if you want to delete the entire model and to only delte a version of a model, after typing the model name, hit space and type version in float(e.g, 'Eagle 1.0')")
 
 # =============== Comare Model ===============
 def compare(model_name1=None, model1_v=None, model_name2=None, model2_v=None):
-
     if not model_name1 and not model1_v and not model_name2 and not model2_v:
-        model_name1, model1_v = input(f"{Y} Please enter the first model's name and version(model's name <space> version): ").split(' ')
-        model_name2, model2_v = input(f"{Y} Please enter the second model's name and version(model's name <space> version): ").split(' ')
+        try:
+            model_name1, model1_v = input(f"{Y} Please enter the first model's name and version(model's name <space> version): {W}").split(' ')
+            model_name2, model2_v = input(f"{Y} Please enter the second model's name and version(model's name <space> version): {W}").split(' ')
+            if not re.match(r'^[a-zA-Z0-9_-]+$', model_name1) or not re.match(r'^[a-zA-Z0-9_-]+$', model_name2):
+                print(f'{R}⚠ Model names must be alphanumeric, underscores, or hyphens, {rerun_req}')
+                return
+            if not re.match(r'^\d+\.\d$', model1_v) or not re.match(r'^\d+\.\d$', model2_v):
+                print(f'{R}⚠ Versions must be floats (e.g., 1.0), {rerun_req}')
+                return
+        except ValueError:
+            print(f'{R}⚠ Invalid input format, use "model_name version" (e.g., "Eagle 1.0"), {rerun_req}')
+            return
 
-    with open(f'outputs/{model_name1}/{model1_v}/avg_metrics.csv', 'r') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
+    try:
+        path1 = f'outputs/{model_name1}/{model1_v}/avg_metrics.csv'
+        path2 = f'outputs/{model_name2}/{model2_v}/avg_metrics.csv'
+        if not os.path.exists(path1) or not os.path.exists(path2):
+            print(f'{R}⚠ One or both models not found, {rerun_req}')
+            return
+
+        with open(path1, 'r') as f:
+            reader = csv.DictReader(f)
+            row = next(reader, None)
+            if row is None or any(k not in row for k in ["Distance(m)", "Speed(m/s)", "Stability"]):
+                print(f'{R}⚠ Invalid metrics file {path1}, {rerun_req}')
+                return
             model1_distance = float(row["Distance(m)"])
-            model1_speed = float(row['Speed(m/s)'])
+            model1_speed = float(row["Speed(m/s)"])
             model1_stability = float(row["Stability"])
-    
-    with open(f'outputs/{model_name2}/{model2_v}/avg_metrics.csv', 'r') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
+        
+        with open(path2, 'r') as f:
+            reader = csv.DictReader(f)
+            row = next(reader, None)
+            if row is None or any(k not in row for k in ["Distance(m)", "Speed(m/s)", "Stability"]):
+                print(f'{R}⚠ Invalid metrics file {path2}, {rerun_req}')
+                return
             model2_distance = float(row["Distance(m)"])
             model2_speed = float(row["Speed(m/s)"])
             model2_stability = float(row['Stability'])
 
-    print(f"\n{B}⚖ Comparing {model_name2}_v{model2_v} to {model_name1}_v{model1_v}\n")
-    distance_gap = model2_distance - model1_distance
-    stability_gap = model2_stability - model1_stability
-    speed_gap = model2_speed - model1_speed
+        print(f"\n{B}⚖ Comparing {model_name2}_v{model2_v} to {model_name1}_v{model1_v}\n")
+        distance_gap = model2_distance - model1_distance
+        stability_gap = model2_stability - model1_stability
+        speed_gap = model2_speed - model1_speed
 
-    def get_sign(v):
-        return '+' if v > 0 else ''
+        def get_sign(v):
+            return '+' if v > 0 else ''
 
-    print(f'{Y} Distance: {get_sign(distance_gap)}{distance_gap}')
-    print(f'{Y} Stability: {get_sign(stability_gap)}{stability_gap}')
-    print(f'{Y} Speed: {get_sign(speed_gap)}{speed_gap}')
-
+        print(f'{Y} Distance: {get_sign(distance_gap)}{distance_gap}')
+        print(f'{Y} Stability: {get_sign(stability_gap)}{stability_gap}')
+        print(f'{Y} Speed: {get_sign(speed_gap)}{speed_gap}')
+    except (csv.Error, KeyError, ValueError):
+        print(f'{R}⚠ Invalid request, {rerun_req}')
+        global breakw
+        breakw = True
 
 # ============== Generate Overall Report =====================
 def generate_overall():
@@ -645,16 +811,20 @@ def generate_overall():
                 try:
                     with open(csv_path, "r", encoding="utf-8") as f:
                         reader = csv.DictReader(f)
-                        for row in reader:
-                            records.append({
-                                "Model": model,
-                                "Version": version,
-                                "Distance(m)": float(row["Distance(m)"]),
-                                "Stability": float(row["Stability"]),
-                                "Speed(m/s)": float(row["Speed(m/s)"])
-                            })
-                except Exception as e:
+                        row = next(reader, None)
+                        if row is None or any(k not in row for k in ["Distance(m)", "Stability", "Speed(m/s)"]):
+                            print(f"{R}❌ Invalid metrics file {csv_path}, try option 1! ✈️")
+                            continue
+                        records.append({
+                            "Model": model,
+                            "Version": version,
+                            "Distance(m)": float(row["Distance(m)"]),
+                            "Stability": float(row["Stability"]),
+                            "Speed(m/s)": float(row["Speed(m/s)"])
+                        })
+                except (csv.Error, KeyError, ValueError):
                     print(R + f"❌ Crash landing! Bad metrics file at {csv_path}. Try option 1! ✈️")
+                    continue
 
     if not records:
         print(R + "❌ No metrics found! Create models with option 1, ace! ✈️")
@@ -784,36 +954,37 @@ def generate_overall():
     # Social prompt
     print(Y + "🚀 Share your fleet’s stats on X with #LucidraftDeltaX! Show the world your top planes! ✈️")
 
-def pause():
-    input(W + "\nPress Enter to return to the homepage...")
-
 # ===== Basic Utility Funcs =======
 def draw_rectangle(img, x, y, w, h):
-    color = (0, 255, 255)
-    thickness = 2
-    length = 20
-    corners = [
-        ((x, y), (x + length, y), (x, y + length)), # top-left
-        ((x + w, y), (x + w - length, y), (x + w, y + length)), # top-right
-        ((x, y + h), (x + length, y + h), (x, y + h - length)), # bot-left
-        ((x + w, y + h), (x + w - length, y + h), (x + w, y + h - length)), # bot-right
-    ]
-    # Draw the rectangle
-    for pt1, pt2, pt3 in corners:
-        cv.line(img, pt1, pt2, color, thickness)
-        cv.line(img, pt1, pt3, color, thickness)
+    try:
+        color = (0, 255, 255)
+        thickness = 2
+        length = 20
+        corners = [
+            ((x, y), (x + length, y), (x, y + length)), # top-left
+            ((x + w, y), (x + w - length, y), (x + w, y + length)), # top-right
+            ((x, y + h), (x + length, y + h), (x, y + h - length)), # bot-left
+            ((x + w, y + h), (x + w - length, y + h), (x + w, y + h - length)), # bot-right
+        ]
+        # Draw the rectangle
+        for pt1, pt2, pt3 in corners:
+            cv.line(img, pt1, pt2, color, thickness)
+            cv.line(img, pt1, pt3, color, thickness)
 
-    # Draw a circle and cross
-    cv.line(img, (x, y), (x + w, y + h), color, thickness)
-    cv.line(img, (x + w, y), (x, y + h), color, thickness)
-    center = (x + w // 2, y + h // 2)
-    for i in range(6, 0, -1):
-        alpha = 0.1 * i
-        overlay = img.copy()
-        cv.circle(overlay, center, i * 3, color, -1)
-        cv.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
-    cv.circle(img, center, 4, color, -1)
-
+        # Draw a circle and cross
+        cv.line(img, (x, y), (x + w, y + h), color, thickness)
+        cv.line(img, (x + w, y), (x, y + h), color, thickness)
+        center = (x + w // 2, y + h // 2)
+        for i in range(6, 0, -1):
+            alpha = 0.1 * i
+            overlay = img.copy()
+            cv.circle(overlay, center, i * 3, color, -1)
+            cv.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
+        cv.circle(img, center, 4, color, -1)
+    except:
+        print(f'{R}⚠ Seems like frame has failed to process, {rerun_req}')
+        global breakw
+        breakw = True
 
 def draw_grid(img, spacing=60, color=(0, 255, 255), thickness=1, alpha=0.1): # Just draws a grid on the video to make it cool, maybe 🤷‍♂️
     overlay = img.copy()
@@ -827,7 +998,18 @@ def draw_grid(img, spacing=60, color=(0, 255, 255), thickness=1, alpha=0.1): # J
 # RUN!
 if __name__ == "__main__":
     while True:
+        breakw = False  # Reset breakw each loop
         choice = homepage()
+        try:
+            choice_int = int(choice)
+            if choice_int < 1 or choice_int > 7:
+                print(f'{R}⚠ Please select a number between 1 and 7, {rerun_req}')
+                pause()
+                continue
+        except ValueError:
+            print(f'{R}⚠ Invalid input, please enter a number (1-7), {rerun_req}')
+            pause()
+            continue
         if choice == "7":
             print(
                 B + "\n------------------ Goodbye! Fly high! ✈️ --------------------\n"
@@ -849,6 +1031,4 @@ if __name__ == "__main__":
             pause()
         elif choice == '6':
             generate_overall()
-            pause()
-        else:
             pause()
