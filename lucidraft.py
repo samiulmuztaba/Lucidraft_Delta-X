@@ -21,6 +21,7 @@ G = Fore.GREEN + Style.BRIGHT
 R = Fore.RED + Style.BRIGHT
 M = Fore.MAGENTA + Style.BRIGHT
 
+
 # ==== Main Homepage ====
 def banner():
     logo = f"""
@@ -31,17 +32,27 @@ def banner():
 """
     print(logo)
 
+# Setup
+# Input for real world metrics
+ref_obj_m = None
+ref_obj_px = None
+if not ref_obj_px and not ref_obj_m:
+    print(f'{B}\nBefore we begin, I need to know the px per meter for the video. For this, Measure an object in the video and then measer its length in pixels so that we can give you distance\n in meters rather than in pixels (required!)')
+    ref_obj_m = float(input(f'{Y}📏 Length of reference object in meters (e.g., 1.0 for a 1-meter stick): ').strip())
+    ref_obj_px = float(input(f'{Y}👾 Pixel length of reference object in video (e.g., 100.0 pixels): ').strip())
+    px_per_m = float(ref_obj_px / ref_obj_m)
 
 def homepage():
     banner()
     print(B + " [1]" + W + " ➕ Add New Model")
-    print(B + " [2]" + W + " ✨ Update Existing Model")
-    print(B + " [3]" + W + " 📂 View Models")
-    print(B + " [4]" + W + " 🔍 Compare Models")
-    print(B + " [5]" + W + " 📊 Generate Overall Report, done for this phase of iterations!")
-    print(B + " [6]" + W + " ❌ Exit")
+    print(B + " [2]" + W + " 📂 View Models")
+    print(B + " [3]" + W + " ✨ Update Existing Model")
+    print(B + " [4]" + W + " 🗑 Delete Existing Model")
+    print(B + " [5]" + W + " 🔍 Compare Models")
+    print(B + " [6]" + W + " 📊 Generate Overall Report, done for this phase of iterations!")
+    print(B + " [7]" + W + " 🚪 Exit")
     print(C + "─" * 50)
-    return input(Y + "Select an option (1-6): " + W).strip()
+    return input(Y + "Select an option (1-7): " + W).strip()
 
 # ===== Log New Model =====
 def log_new_model(model_name=None, model_version=1.0):
@@ -73,6 +84,7 @@ def log_new_model(model_name=None, model_version=1.0):
             cv.imwrite(picture_path, cv.imread(retry_path))
             print(G + f"\n✅ Picture saved → {picture_path}")
 
+    
     # video input with validation
     in_videos_path = input(Y + "🎥 Flight Videos (comma separated): " + W).strip()
     videos_dir = os.path.join(outputs_dir, "Flight Videos")
@@ -213,7 +225,9 @@ def log_new_model(model_name=None, model_version=1.0):
         else:
             airtime = 0
 
-        speed = distance_px / airtime if airtime > 0 else 0
+        # Real Metrics Conversion
+        distance_m = distance_px * px_per_m
+        speed = distance_m / airtime if airtime > 0 else 0
 
         # Take the stability score as input from user
         print(f"{C}📝 Enter stability score for {model_name} (1-10): ", end="")
@@ -227,10 +241,10 @@ def log_new_model(model_name=None, model_version=1.0):
         os.makedirs(os.path.dirname(metrics_path_f), exist_ok=True)
         with open(metrics_path_f, "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(["Distance_px", "Airtime_s", "Speed_px_per_s", "Stability"])
+            writer.writerow(["Distance(m)", "Airtime(s)", "Speed(m/s)", "Stability"])
             writer.writerow(
                 [
-                    f"{distance_px:.2f}",
+                    f"{distance_m:.2f}",
                     f"{airtime:.2f}",
                     f"{speed:.2f}",
                     stability_score,
@@ -240,7 +254,7 @@ def log_new_model(model_name=None, model_version=1.0):
 
     # ---- Averages -----
     # Metrics
-    tot_distance = tot_airtime = tot_speed = tot_stability = 0
+    tot_distance = tot_airtime = tot_speed = tot_stability = 0 # declare all as 0 initially
     metrics_path = os.path.join(outputs_dir, "Flight Metrics")
     mfile_count = 0
 
@@ -251,9 +265,9 @@ def log_new_model(model_name=None, model_version=1.0):
                 with open(filepath, "r", newline="") as f:
                     reader = csv.DictReader(f)
                     for row in reader:
-                        tot_distance += float(row["Distance_px"])
-                        tot_airtime += float(row["Airtime_s"])
-                        tot_speed += float(row["Speed_px_per_s"])
+                        tot_distance += float(row["Distance(m)"])
+                        tot_airtime += float(row["Airtime(s)"])
+                        tot_speed += float(row["Speed(m/s)"])
                         tot_stability += float(row["Stability"])
                         mfile_count += 1
 
@@ -265,7 +279,7 @@ def log_new_model(model_name=None, model_version=1.0):
     avg_metrics_path = os.path.join(outputs_dir, "avg_metrics.csv")
     with open(avg_metrics_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["Distance_px", "Airtime_s", "Speed_px_per_s", "Stability"])
+        writer.writerow(["Distance(m)", "Airtime(s)", "Speed(m/s)", "Stability"])
         writer.writerow(
             [
                 f"{avg_distance:.2f}",
@@ -374,6 +388,7 @@ def log_new_model(model_name=None, model_version=1.0):
 
             is_best_distance = True
             is_most_stable = False
+
             # Average Metrics
             avg_metrics = {}
             metrics_path = os.path.join(outputs_dir, 'avg_metrics.csv')
@@ -382,9 +397,9 @@ def log_new_model(model_name=None, model_version=1.0):
                     reader = csv.DictReader(mf)
                     for row in reader:
                         avg_metrics = {
-                            'Distance': float(row['Distance_px']),
-                            'Airtime': float(row['Airtime_s']),
-                            'Speed': float(row['Speed_px_per_s']),
+                            'Distance': float(row['Distance(m)']),
+                            'Airtime': float(row['Airtime(s)']),
+                            'Speed': float(row['Speed(m/s)']),
                             'Stability': float(row['Stability'])
                         }
                 f.write('## Average Metrics\n')
@@ -404,7 +419,7 @@ def log_new_model(model_name=None, model_version=1.0):
                                 with open(v_metrics_path, 'r', encoding='utf-8') as vf:
                                     reader = csv.DictReader(vf)
                                     for row in reader:
-                                        if float(row['Distance_px']) > max_distance:
+                                        if float(row['Distance(m)']) > max_distance:
                                             is_best_distance = False
                                             break
             else:
@@ -424,9 +439,9 @@ def log_new_model(model_name=None, model_version=1.0):
                             for row in reader:
                                 video_metrics.append({
                                     'Video Name': video_name,
-                                    'Distance': float(row['Distance_px']),
-                                    'Airtime': float(row['Airtime_s']),
-                                    'Speed': float(row['Speed_px_per_s']),
+                                    'Distance': float(row['Distance(m)']),
+                                    'Airtime': float(row['Airtime(s)']),
+                                    'Speed': float(row['Speed(m/s)']),
                                     'Stability': float(row['Stability']),
                                     'Performance Note': ''
                                 })
@@ -457,67 +472,14 @@ def log_new_model(model_name=None, model_version=1.0):
         print(f"{G}📄 Report saved to → {report_path}")
     except Exception as e:
         print(f"{R}❌ Turbulence! Failed to generate report: {e}. Check files and try again! ✈️")
-    print(f'{B}✈  {model_name} v{model_version} --> {distance_px}px, {speed}px/s, {stability_score}')
+
+    # one-liner
+    print(f'{B}✈  {model_name} v{model_version} --> {distance_m}m, {speed}m/s, {stability_score}')
 
 
     return model_name, model_version
 
-# =================== Update Model ======================
-def get_prev_v(model_name):
-    model_path = os.path.join('outputs', model_name)
-    if not os.path.exists(model_path):
-        return None
-    vs = []
-    for v in os.listdir(model_path):
-        vs.append(float(v))
-    
-    return max(vs)
-
-def update_model():
-    model_name = input(f'\n{Y}Please enter the name of the model you want to update: ')
-    prev_version = get_prev_v(model_name)
-    new_version = round(prev_version + 0.1, 1)
-    if not prev_version:
-        print(f'{R}⚠ No models found! Please first create one, then update if needed')
-    else:
-        log_new_model(model_name, new_version)
-        compare(model_name, prev_version, model_name, new_version)
-
-def compare(model_name1=None, model1_v=None, model_name2=None, model2_v=None):
-
-    if not model_name1 and not model1_v and not model_name2 and not model2_v:
-        model_name1, model1_v = input(f"{Y} Please enter the first model's name and version(model's name <space> version): ").split(' ')
-        model_name2, model2_v = input(f"{Y} Please enter the second model's name and version(model's name <space> version): ").split(' ')
-
-    with open(f'outputs/{model_name1}/{model1_v}/avg_metrics.csv', 'r') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            model1_distance = float(row["Distance_px"])
-            model1_speed = float(row['Speed_px_per_s'])
-            model1_stability = float(row["Stability"])
-    
-    with open(f'outputs/{model_name2}/{model2_v}/avg_metrics.csv', 'r') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            model2_distance = float(row["Distance_px"])
-            model2_speed = float(row["Speed_px_per_s"])
-            model2_stability = float(row['Stability'])
-
-    print(f"\n{B}⚖ Comparing {model_name2}_v{model2_v} to {model_name1}_v{model1_v}\n")
-    distance_gap = model2_distance - model1_distance
-    stability_gap = model2_stability - model1_stability
-    speed_gap = model2_speed - model1_speed
-
-    def get_sign(v):
-        return '+' if v > 0 else ''
-
-    print(f'{Y} Distance: {get_sign(distance_gap)}{distance_gap}')
-    print(f'{Y} Stability: {get_sign(stability_gap)}{stability_gap}')
-    print(f'{Y} Speed: {get_sign(speed_gap)}{speed_gap}')
-
-
-
-# ================= Model view ========================
+# ================= View Model ========================
 def create_combined_table(data):
     """
     Generates a single ASCII table with model names as internal headers.
@@ -553,7 +515,6 @@ def create_combined_table(data):
     # Generate the table with an empty list for headers to avoid the TypeError
     return tabulate(all_data, headers=[], tablefmt="grid")
 
-
 def view_models():
     outb = 'outputs'
     models = {}  
@@ -581,12 +542,79 @@ def view_models():
                             # Append a new dictionary to the list for this model
                             models[model_name].append({
                                 'version': str(version),
-                                'distance': str(row['Distance_px']),
-                                'speed': str(row['Speed_px_per_s']),
+                                'distance': str(row['Distance(m)']),
+                                'speed': str(row['Speed(m/s)']),
                                 'stability': str(row['Stability'])
                             })
                             
     print(B + create_combined_table(models))
+
+# =================== Update Model ======================
+def get_prev_v(model_name):
+    model_path = os.path.join('outputs', model_name)
+    if not os.path.exists(model_path):
+        return None
+    vs = []
+    for v in os.listdir(model_path):
+        vs.append(float(v))
+    
+    return max(vs)
+
+def update_model():
+    model_name = input(f'\n{Y}Model Name: ')
+    prev_version = get_prev_v(model_name)
+    new_version = round(prev_version + 0.1, 1)
+    if not prev_version:
+        print(f'{R}⚠ No models found! Please first create one, then update if needed')
+    else:
+        log_new_model(model_name, new_version)
+        compare(model_name, prev_version, model_name, new_version)
+
+# ===================== Delete Model =============
+def delete_model():
+    mv = input(f'\n{Y}Model name(include version with a space after model if you want a specific version to be deleted): ')
+    model = mv.split(' ')[0]
+    version = None
+    if len(mv.split(' ')) >= 2 and len(mv.split(' ')) < 3:
+        version = mv.split(' ')[1]
+    elif len(mv.split(' ')) >= 3:
+        print(f'{R} Please first enter the model name and if you want to delete just one version of that model, just add space after the model name and write down the version in float\n. Multiple version deletion is not supported!')
+    
+    shutil.rmtree(f'outputs/{model}/{version if version else ''}')
+    print(f'{G}Successfully removed {model} {version if version else ''}!')
+
+# =============== Comare Model ===============
+def compare(model_name1=None, model1_v=None, model_name2=None, model2_v=None):
+
+    if not model_name1 and not model1_v and not model_name2 and not model2_v:
+        model_name1, model1_v = input(f"{Y} Please enter the first model's name and version(model's name <space> version): ").split(' ')
+        model_name2, model2_v = input(f"{Y} Please enter the second model's name and version(model's name <space> version): ").split(' ')
+
+    with open(f'outputs/{model_name1}/{model1_v}/avg_metrics.csv', 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            model1_distance = float(row["Distance(m)"])
+            model1_speed = float(row['Speed(m/s)'])
+            model1_stability = float(row["Stability"])
+    
+    with open(f'outputs/{model_name2}/{model2_v}/avg_metrics.csv', 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            model2_distance = float(row["Distance(m)"])
+            model2_speed = float(row["Speed(m/s)"])
+            model2_stability = float(row['Stability'])
+
+    print(f"\n{B}⚖ Comparing {model_name2}_v{model2_v} to {model_name1}_v{model1_v}\n")
+    distance_gap = model2_distance - model1_distance
+    stability_gap = model2_stability - model1_stability
+    speed_gap = model2_speed - model1_speed
+
+    def get_sign(v):
+        return '+' if v > 0 else ''
+
+    print(f'{Y} Distance: {get_sign(distance_gap)}{distance_gap}')
+    print(f'{Y} Stability: {get_sign(stability_gap)}{stability_gap}')
+    print(f'{Y} Speed: {get_sign(speed_gap)}{speed_gap}')
 
 
 # ============== Generate Overall Report =====================
@@ -621,9 +649,9 @@ def generate_overall():
                             records.append({
                                 "Model": model,
                                 "Version": version,
-                                "Distance_px": float(row["Distance_px"]),
+                                "Distance(m)": float(row["Distance(m)"]),
                                 "Stability": float(row["Stability"]),
-                                "Speed_px_per_s": float(row["Speed_px_per_s"])
+                                "Speed(m/s)": float(row["Speed(m/s)"])
                             })
                 except Exception as e:
                     print(R + f"❌ Crash landing! Bad metrics file at {csv_path}. Try option 1! ✈️")
@@ -632,8 +660,8 @@ def generate_overall():
         print(R + "❌ No metrics found! Create models with option 1, ace! ✈️")
         return
 
-    # Sort by Distance_px, Stability, Speed_px_per_s (descending)
-    records.sort(key=lambda x: (x["Distance_px"], x["Stability"], x["Speed_px_per_s"]), reverse=True)
+    # Sort by Distance, Stability, Speed (descending)
+    records.sort(key=lambda x: (x["Distance(m)"], x["Stability"], x["Speed(m/s)"]), reverse=True)
 
     # Prepare table data with ★ for top 3
     table_data = []
@@ -642,9 +670,9 @@ def generate_overall():
         table_data.append([
             model_name,
             record["Version"],
-            record["Distance_px"],
+            record["Distance(m)"],
             record["Stability"],
-            record["Speed_px_per_s"]
+            record["Speed(m/s)"]
         ])
 
     # Terminal table
@@ -661,22 +689,22 @@ def generate_overall():
     # Save CSV
     os.makedirs(base_dir, exist_ok=True)
     with open(csv_file, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["Model", "Version", "Distance_px", "Stability", "Speed_px_per_s"])
+        writer = csv.DictWriter(f, fieldnames=["Model", "Version", "Distance(m)", "Stability", "Speed(m/s)"])
         writer.writeheader()
         for record in records:
             writer.writerow({
                 "Model": record["Model"],
                 "Version": record["Version"],
-                "Distance_px": f"{record['Distance_px']:.2f}",
+                "Distance(m)": f"{record['Distance(m)']:.2f}",
                 "Stability": f"{record['Stability']:.2f}",
-                "Speed_px_per_s": f"{record['Speed_px_per_s']:.2f}"
+                "Speed(m/s)": f"{record['Speed(m/s)']:.2f}"
             })
     print(G + f"📊 Overall report saved to → {csv_file}")
 
     # Bar chart for distance
     plt.figure(figsize=(8, 6))
     labels = [f"{r['Model']}_v{r['Version']}" for r in records]
-    distances = [r["Distance_px"] for r in records]
+    distances = [r["Distance(m)"] for r in records]
     plt.bar(labels, distances, color="#00FFFF")
     plt.title("Fleet Distance Comparison")
     plt.xlabel("Model and Version")
@@ -700,15 +728,15 @@ def generate_overall():
         f.write("|-------|---------|-------------------|---------------|------------------|\n")
         for i, record in enumerate(records):
             model_name = f"★ {record['Model']}" if i < 3 else record["Model"]
-            f.write(f"| {model_name} | {record['Version']} | {record['Distance_px']:.2f} | {record['Stability']:.2f} | {record['Speed_px_per_s']:.2f} |\n")
+            f.write(f"| {model_name} | {record['Version']} | {record['Distance(m)']:.2f} | {record['Stability']:.2f} | {record['Speed(m/s)']:.2f} |\n")
         f.write("\n---\n\n")
         f.write("## 🏆 Top Performers\n")
-        best_distance = max(records, key=lambda x: x["Distance_px"])
+        best_distance = max(records, key=lambda x: x["Distance(m)"])
         best_stability = max(records, key=lambda x: x["Stability"])
-        best_speed = max(records, key=lambda x: x["Speed_px_per_s"])
-        f.write(f"- **Longest Distance** → {best_distance['Model']} v{best_distance['Version']} ({best_distance['Distance_px']:.2f} px) ✅\n")
+        best_speed = max(records, key=lambda x: x["Speed(m/s)"])
+        f.write(f"- **Longest Distance** → {best_distance['Model']} v{best_distance['Version']} ({best_distance['Distance(m)']:.2f} px) ✅\n")
         f.write(f"- **Most Stable** → {best_stability['Model']} v{best_stability['Version']} ({best_stability['Stability']:.2f})\n")
-        f.write(f"- **Fastest Speed** → {best_speed['Model']} v{best_speed['Version']} ({best_speed['Speed_px_per_s']:.2f} px/s)\n\n")
+        f.write(f"- **Fastest Speed** → {best_speed['Model']} v{best_speed['Version']} ({best_speed['Speed(m/s)']:.2f} px/s)\n\n")
         f.write("---\n\n")
         f.write("## 📈 Comparative Trends\n\n")
         f.write("### Distance Progression\n")
@@ -716,14 +744,14 @@ def generate_overall():
             model_records = [r for r in records if r["Model"] == model]
             if len(model_records) > 1:
                 versions = sorted(model_records, key=lambda x: float(x["Version"]))
-                diff = versions[0]["Distance_px"] - versions[-1]["Distance_px"]
+                diff = versions[0]["Distance(m)"] - versions[-1]["Distance(m)"]
                 f.write(f"- {model} branch {'dominates with consistent gains' if diff > 0 else 'shows modest progress' if diff > -50 else 'stagnated'} ({'+' if diff > 0 else ''}{diff:.1f} px from v{versions[-1]['Version']} → v{versions[0]['Version']}).\n")
             else:
                 f.write(f"- {model} branch has single version, no progression data.\n")
         f.write("\n### Stability vs Distance\n")
         best = records[0]
         f.write(f"- **Best Stability Plane** → {best_stability['Model']} v{best_stability['Version']} ({best_stability['Stability']:.2f})\n")
-        f.write(f"- **Best Distance Plane** → {best_distance['Model']} v{best_distance['Version']} ({best_distance['Distance_px']:.2f} px)\n")
+        f.write(f"- **Best Distance Plane** → {best_distance['Model']} v{best_distance['Version']} ({best_distance['Distance(m)']:.2f} px)\n")
         f.write(f"- Clear correlation: distance and stability peaked together in {best['Model']} branch.\n\n")
         f.write(f"![Fleet Distance Comparison](overall_report.png)\n\n")
         f.write("---\n\n")
@@ -759,7 +787,7 @@ def generate_overall():
 def pause():
     input(W + "\nPress Enter to return to the homepage...")
 
-# ===== Basic Utility Funcs Used For video processing
+# ===== Basic Utility Funcs =======
 def draw_rectangle(img, x, y, w, h):
     color = (0, 255, 255)
     thickness = 2
@@ -800,7 +828,7 @@ def draw_grid(img, spacing=60, color=(0, 255, 255), thickness=1, alpha=0.1): # J
 if __name__ == "__main__":
     while True:
         choice = homepage()
-        if choice == "6":
+        if choice == "7":
             print(
                 B + "\n------------------ Goodbye! Fly high! ✈️ --------------------\n"
             )
@@ -809,14 +837,17 @@ if __name__ == "__main__":
             log_new_model()
             pause()
         elif choice == "2":
-            update_model()
-        elif choice == "3":
             view_models()
+        elif choice == "3":
+            update_model()
             pause()
         elif choice == "4":
-            compare()
+            delete_model()
             pause()
         elif choice == "5":
+            compare()
+            pause()
+        elif choice == '6':
             generate_overall()
             pause()
         else:
