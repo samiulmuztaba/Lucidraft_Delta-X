@@ -1,0 +1,13 @@
+build/
+dist/
+cg_recs.md
+download.jpeg
+*.mp4
+*.spec
+test.py
+outputs/
+color_picker.py
+inputs/
+plot_graph.py
+topdf.py
+*.pdf

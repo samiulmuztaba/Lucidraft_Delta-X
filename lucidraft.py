@@ -16,6 +16,9 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from rich import box
+from collections import deque
+from matplotlib import cm
+import seaborn as sns
 
 
 
@@ -54,18 +57,18 @@ rerun_req = 'please try to run the program again!'
 
 # Setup
 # Input for real world metrics
-ref_obj_m = None
-ref_obj_px = None
-if not ref_obj_px and not ref_obj_m:
-    print(f'{B}\nBefore we begin, I need to know the px per meter for the video. For this, Measure an object in the video and then measer its length in pixels so that we can give you distance\nin meters rather than in pixels (required!)')
-    try:
-        ref_obj_m = float(input(f'{Y}📏 Length of reference object in meters (e.g., 1.0 for a 1-meter stick): {W}').strip())
-        ref_obj_px = float(input(f'{Y}👾 Pixel length of reference object in video (e.g., 100.0 pixels): {W}').strip())
-        px_per_m = float(ref_obj_px / ref_obj_m)
-        print(f'\n{G}🤗 We are done, thanks for your patience!')
-    except:
-        print(f'{R}⚠  Please provide inputs as numbers, {rerun_req}')
-        breakw = True
+# ref_obj_m = None
+# ref_obj_px = None
+# if not ref_obj_px and not ref_obj_m:
+#     print(f'{B}\nBefore we begin, I need to know the px per meter for the video. For this, Measure an object in the video and then measer its length in pixels so that we can give you distance\nin meters rather than in pixels (required!)')
+#     try:
+#         ref_obj_m = float(input(f'{Y}📏 Length of reference object in meters (e.g., 1.0 for a 1-meter stick): {W}').strip())
+#         ref_obj_px = float(input(f'{Y}👾 Pixel length of reference object in video (e.g., 100.0 pixels): {W}').strip())
+#         px_per_m = float(ref_obj_px / ref_obj_m)
+#         print(f'\n{G}🤗 We are done, thanks for your patience!')
+#     except:
+#         print(f'{R}⚠  Please provide inputs as numbers, {rerun_req}')
+#         breakw = True
         
 
 def homepage():
@@ -81,10 +84,12 @@ def homepage():
     return input(Y + "Select an option (1-7): " + W).strip()
 
 # ===== Log New Model =====
+# import numpy as np  # Ensure numpy is imported globally
 def log_new_model(model_name=None, model_version=1.0):
+
     global breakw
     need = "Add" if not model_name else 'Update'
-    print(C + f"\n--- {need} New Model ---\n") # state management like react? 🤪
+    print(C + f"\n--- {need} New Model ---\n")
 
     # ---- Take important inputs ------
     if not model_name:
@@ -94,7 +99,7 @@ def log_new_model(model_name=None, model_version=1.0):
             if not model_name:
                 print(f'{R}🤦 You entered wrong name again! {rerun_req}')
                 return None
-            
+    
     design_notes = input(Y + "📝 Design Notes: " + W).strip()
     
     outputs_dir = os.path.join("outputs", model_name, str(model_version))
@@ -107,7 +112,6 @@ def log_new_model(model_name=None, model_version=1.0):
         else:
             print(f'{Y}❌ Process terminated because of wrong input,{rerun_req}')
             return None
-            
 
     def path_validation_msg():
         print(f'{R}⚠  Dude, will you never provide a valid path?')
@@ -134,133 +138,129 @@ def log_new_model(model_name=None, model_version=1.0):
             print(G + f"\n✅ Picture saved → {picture_path}")
         else:
             path_validation_msg()
-            # breakw = True
             return None
 
-    video_paths = (
-        [v.strip() for v in in_videos_path.split(",")] if in_videos_path else []
-    )
+    # Parse and validate video paths, removing duplicates
+    video_paths = list(dict.fromkeys([v.strip() for v in in_videos_path.split(",") if v.strip()])) if in_videos_path else []
+    print(f"{Y}📹 Processing video paths: {video_paths}")
+
+    if not video_paths:
+        print(f"{R}❌ No valid video paths provided. Please provide at least one valid video.")
+        return None
 
     for video_path in video_paths:
         if os.path.exists(video_path):
-            shutil.copy(video_path, videos_dir)
+            try:
+                cap = cv.VideoCapture(video_path)
+                if not cap.isOpened():
+                    print(R + f"❌ Error: Could not open video '{video_path}'. Check path, permissions, or codec.")
+                    continue
+                cap.release()
+                shutil.copy(video_path, videos_dir)
+                print(G + f"✅ Copied video to → {os.path.join(videos_dir, os.path.basename(video_path))}")
+            except Exception as e:
+                print(f"{R}❌ Error accessing video '{video_path}': {e}")
+                continue
         else:
             print(f"{R}❌ Video not found: {video_path}")
-            return None
+            continue
 
     print(G + f"✅ Videos saved → {videos_dir}")
     video_count = len(video_paths)
 
-    preview_mode = True # toggle this if u don't want to watch the video, but note that it wil take the same amount of time!
+    if video_count == 0:
+        print(f"{R}❌ No valid videos to process. Aborting.")
+        return None
+
+    preview_mode = True  # toggle this if you don't want preview
 
     # ------ Save datas ------
-    # Save Metrics
     metadata_path = os.path.join(outputs_dir, "metadata.txt")
-    with open(metadata_path, "w") as f:
-        f.write(f"Model Name: {model_name}\n")
-        f.write(f"Version: {model_version}\n")
-        f.write(f"Design Notes: {design_notes}\n")
-    print(f"{Fore.CYAN}{Style.BRIGHT}📓 Metadata Saved to {metadata_path}\n")
+    try:
+        with open(metadata_path, "w") as f:
+            f.write(f"Model Name: {model_name}\n")
+            f.write(f"Version: {model_version}\n")
+            f.write(f"Design Notes: {design_notes}\n")
+        print(f"{Fore.CYAN}{Style.BRIGHT}📓 Metadata Saved to {metadata_path}\n")
+    except Exception as e:
+        print(f"{R}❌ Error saving metadata to {metadata_path}: {e}")
+        return None
 
     # per video processing
     for video_path in video_paths:
-        distance_px = 0
         trajectory_points = []
         frame_count = 0
-        first_detected = None # these are for accurate airtime
+        first_detected = None
         last_detected = None
+        fps = 30
+        distance_m = 0
 
         video_n = os.path.basename(video_path)[:-4]
         cap = cv.VideoCapture(video_path)
         if not cap.isOpened():
-            print(R + f"❌ Error: Could not open video '{video_path}'")
+            print(R + f"❌ Error: Could not open video '{video_path}'. Check path, permissions, or codec.")
             continue
 
-        fps = cap.get(cv.CAP_PROP_FPS) if cap.get(cv.CAP_PROP_FPS) > 0 else 30
+        # Get FPS from video if available
+        fps_val = cap.get(cv.CAP_PROP_FPS)
+        if fps_val and fps_val > 0:
+            fps = fps_val
 
         video_no = video_paths.index(video_path) + 1
         print(f'{Y}▶ Processing {os.path.basename(video_path)} ({video_no}/{video_count})')
 
+        # --- Step 1: read first frame and pause ---
+        ret, first_frame = cap.read()
+        if not ret:
+            print(f"❌ Could not read video '{video_path}'")
+            cap.release()
+            continue
+        first_frame = cv.resize(first_frame, (960, 540))
+        cv.putText(first_frame, "⏸ Press SPACE or ENTER to select the plane", (50, 50),
+                   cv.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        cv.imshow(f"Video for {model_name}", first_frame)
+
+        # Wait until user presses SPACE (32) or ENTER (13)
+        while True:
+            key = cv.waitKey(0) & 0xFF
+            if key in [13, 32]:
+                break
+
+        # --- Step 2: select ROI ---
+        bbox = cv.selectROI("Select Plane", first_frame, False)
+        cv.destroyWindow("Select Plane")
+
+        # --- Step 3: init tracker ---
+        try:
+            tracker = cv.legacy.TrackerCSRT_create()
+        except AttributeError:
+            tracker = cv.TrackerCSRT_create()
+        tracker.init(first_frame, bbox)
+
+        # --- Step 4: start tracking ---
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
-
-            frame_count += 1
             frame = cv.resize(frame, (960, 540))
-            hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-            lower, upper = np.array([35, 50, 102]), np.array([179, 255, 255])
-            mask = cv.inRange(hsv, lower, upper)
+            frame_count += 1
 
-            kernel = np.ones((5, 5), np.uint8)
-            mask = cv.morphologyEx(mask, cv.MORPH_OPEN, kernel)
-            mask = cv.morphologyEx(mask, cv.MORPH_DILATE, kernel)
-
-            contours, _ = cv.findContours(
-                mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE
-            )
-
-            # Count planes in this frame
-            plane_count = 0
-            detected_this_frame = False
-            for contour in contours:
-                area = cv.contourArea(contour)
-                if area > 500:
-                    plane_count += 1
-            if plane_count > 1:
-                print(f'{R}⚠ Multiple planes detected in frame {frame_count}! Please provide a video with only one blue object (your plane). Results will be invalid. {rerun_req}')
-                print(f'{R}🚫 Processing stopped due to multiple planes detected.')
-                cap.release()
-                if preview_mode:
-                    cv.destroyAllWindows()
-                return None
-
-            # If exactly one plane, process as before
-            for contour in contours:
-                area = cv.contourArea(contour)
-                if area > 500:
-                    detected_this_frame = True
-                    x, y, w, h = cv.boundingRect(contour)
-                    center = (x + w // 2, y + h // 2)
-                    trajectory_points.append(center)
-
-                    cv.putText(
-                        frame,
-                        "Plane",
-                        (x, y - 10),
-                        cv.FONT_HERSHEY_DUPLEX,
-                        0.5,
-                        (0, 255, 0),
-                        2,
-                    )
-                    draw_rectangle(frame, x, y, w, h)
-                    if len(trajectory_points) > 1:
-                        cv.polylines(
-                            frame, [np.array(trajectory_points)], False, (0, 255, 0), 2
-                        )
-                    draw_grid(frame)
-                    cv.putText(
-                        frame,
-                        f"{center}",
-                        (frame.shape[1] - 90, frame.shape[0] - 10),
-                        cv.FONT_HERSHEY_DUPLEX,
-                        0.4,
-                        (0, 255, 255),
-                        1,
-                    )
-
-            # Progress bar
-            progress_percentage = int((frame_count / int(cap.get(cv.CAP_PROP_FRAME_COUNT) or 1)) * 100)
-            bar_length = 30
-            filled_length = int(bar_length * progress_percentage // 100)
-            bar = '█' * filled_length + '-' * (bar_length - filled_length)
-            status = f"Done" if progress_percentage >= 100 else f"{progress_percentage}%"
-            print(f'    {B}🎞 Processing......|{G if status == "Done" else Y}{bar}{W}| {status}', end='\r' if progress_percentage < 100 else '\n', flush=True)
-
-            if detected_this_frame:
+            success, bbox = tracker.update(frame)
+            if success:
+                x, y, w, h = [int(v) for v in bbox]
+                center = (x + w // 2, y + h // 2)
+                trajectory_points.append(center)
                 if first_detected is None:
                     first_detected = frame_count
                 last_detected = frame_count
+
+                # Draw tracking box + trajectory
+                cv.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                if len(trajectory_points) > 1:
+                    cv.polylines(frame, [np.array(trajectory_points)], False, (0, 255, 0), 2)
+                draw_grid(frame)
+                cv.putText(frame, f"{center}", (frame.shape[1]-90, frame.shape[0]-10),
+                           cv.FONT_HERSHEY_DUPLEX, 0.4, (0, 255, 255), 1)
 
             if preview_mode:
                 cv.imshow(f"Video for {model_name}", frame)
@@ -272,37 +272,44 @@ def log_new_model(model_name=None, model_version=1.0):
             cv.destroyAllWindows()
 
         if not trajectory_points:
-            print(f'{R}⚠ No plane was detected, Please try to provide a video where you clearly show the plane and make sure that there is not another or more blue object(s), {rerun_req}')
-            return None
+            print(f'{R}⚠ No plane was detected in {video_path}, Please try to provide a video where you clearly show the plane and make sure that there is not another or more blue object(s), {rerun_req}')
+            continue
 
         # Save the coordinates
         coordinates_path_f = os.path.join(
             outputs_dir, "Flight Coordinates", f"{video_n}_coordinates.csv"
         )
         os.makedirs(os.path.dirname(coordinates_path_f), exist_ok=True)
-        with open(coordinates_path_f, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["X", "Y"])
-            for x, y in trajectory_points:
-                writer.writerow([x, y])
-        print(f"    {G}📈 Flight Trajectory Coordinates saved to {coordinates_path_f}")
+        try:
+            with open(coordinates_path_f, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["X", "Y"])
+                for x, y in trajectory_points:
+                    writer.writerow([x, y])
+            print(f"    {G}📈 Flight Trajectory Coordinates saved to {coordinates_path_f}")
+            print(f"    {Y}Debug: Saved {len(trajectory_points)} points for {video_n}")
+        except Exception as e:
+            print(f"{R}❌ Error saving coordinates to {coordinates_path_f}: {e}")
+            continue
 
-        # Save the metrics
-        if trajectory_points:
-            distance_px = max(x for x, y in trajectory_points) - min(
-                x for x, y in trajectory_points
-            ) # horizontal distance
-        else:
-            distance_px = 0
+        # Prompt user for distance in meters
+        try:
+            distance_m = float(input(f"    {C}📏 Enter flight distance for {video_n} in meters (e.g., 10.5): {W}"))
+            if distance_m < 0:
+                print(f"    {R}⚠ Distance must be non-negative. Setting to 0.")
+                distance_m = 0
+        except ValueError:
+            print(f"    {R}⚠ Invalid distance input. Please enter a number, {rerun_req}")
+            continue
 
+        # Calculate airtime
         if first_detected is not None and last_detected is not None:
             airtime_frames = last_detected - first_detected + 1
-            airtime = airtime_frames / fps # see, we used that vars for acc airtime :)
+            airtime = airtime_frames / fps if fps > 0 else 0
         else:
             airtime = 0
 
-        # Real Metrics Conversion
-        distance_m = distance_px * px_per_m
+        # Calculate speed
         speed = distance_m / airtime if airtime > 0 else 0
 
         # Take the stability score as input from user
@@ -314,30 +321,33 @@ def log_new_model(model_name=None, model_version=1.0):
             elif stability_score < 0:
                 print(f'    {M} Bruh, did that fly that bad? But you are only allowed to enter in range of 0 to 10. We will take that as 0, btw!')
                 stability_score = 0
-        except:
+        except ValueError:
             print(f'    {R}⚠ Only numbers between 0 and 10 are allowed, {rerun_req}')
-            return None
+            continue
 
         metrics_path_f = os.path.join(
             outputs_dir, "Flight Metrics", f"{video_n}_metrics.csv"
         )
         os.makedirs(os.path.dirname(metrics_path_f), exist_ok=True)
-        with open(metrics_path_f, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["Distance(m)", "Airtime(s)", "Speed(m/s)", "Stability"])
-            writer.writerow(
-                [
-                    f"{distance_m:.2f}",
-                    f"{airtime:.2f}",
-                    f"{speed:.2f}",
-                    stability_score,
-                ]
-            )
-        print(f"    {B}📐 Metrics saved to {metrics_path_f}\n")
+        try:
+            with open(metrics_path_f, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["Distance(m)", "Airtime(s)", "Speed(m/s)", "Stability"])
+                writer.writerow(
+                    [
+                        f"{distance_m:.2f}",
+                        f"{airtime:.2f}",
+                        f"{speed:.2f}",
+                        stability_score,
+                    ]
+                )
+            print(f"    {B}📐 Metrics saved to {metrics_path_f}\n")
+        except Exception as e:
+            print(f"{R}❌ Error saving metrics to {metrics_path_f}: {e}")
+            continue
 
     # ---- Averages -----
-    # Metrics
-    tot_distance = tot_airtime = tot_speed = tot_stability = 0 # declare all as 0 initially
+    tot_distance = tot_airtime = tot_speed = tot_stability = 0
     metrics_path = os.path.join(outputs_dir, "Flight Metrics")
     mfile_count = 0
 
@@ -345,14 +355,18 @@ def log_new_model(model_name=None, model_version=1.0):
         for filename in os.listdir(metrics_path):
             if filename.endswith("_metrics.csv"):
                 filepath = os.path.join(metrics_path, filename)
-                with open(filepath, "r", newline="") as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        tot_distance += float(row["Distance(m)"])
-                        tot_airtime += float(row["Airtime(s)"])
-                        tot_speed += float(row["Speed(m/s)"])
-                        tot_stability += float(row["Stability"])
-                        mfile_count += 1
+                try:
+                    with open(filepath, "r", newline="") as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            tot_distance += float(row["Distance(m)"])
+                            tot_airtime += float(row["Airtime(s)"])
+                            tot_speed += float(row["Speed(m/s)"])
+                            tot_stability += float(row["Stability"])
+                            mfile_count += 1
+                except Exception as e:
+                    print(f"{R}❌ Error reading metrics file {filepath}: {e}")
+                    continue
 
     avg_distance = tot_distance / mfile_count if mfile_count > 0 else 0
     avg_airtime = tot_airtime / mfile_count if mfile_count > 0 else 0
@@ -360,18 +374,21 @@ def log_new_model(model_name=None, model_version=1.0):
     avg_stability = tot_stability / mfile_count if mfile_count > 0 else 0
 
     avg_metrics_path = os.path.join(outputs_dir, "avg_metrics.csv")
-    with open(avg_metrics_path, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Distance(m)", "Airtime(s)", "Speed(m/s)", "Stability"])
-        writer.writerow(
-            [
-                f"{avg_distance:.2f}",
-                f"{avg_airtime:.2f}",
-                f"{avg_speed:.2f}",
-                f"{avg_stability:.2f}",
-            ]
-        )
-    print(f"{G}💾 Average metrics of {model_name} saved to {avg_metrics_path}")
+    try:
+        with open(avg_metrics_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Distance(m)", "Airtime(s)", "Speed(m/s)", "Stability"])
+            writer.writerow(
+                [
+                    f"{avg_distance:.2f}",
+                    f"{avg_airtime:.2f}",
+                    f"{avg_speed:.2f}",
+                    f"{avg_stability:.2f}",
+                ]
+            )
+        print(f"{G}💾 Average metrics of {model_name} saved to {avg_metrics_path}")
+    except Exception as e:
+        print(f"{R}❌ Error saving average metrics to {avg_metrics_path}: {e}")
 
     # Coords
     coordinates_path = os.path.join(outputs_dir, "Flight Coordinates")
@@ -383,75 +400,141 @@ def log_new_model(model_name=None, model_version=1.0):
             if filename.endswith("_coordinates.csv"):
                 filepath = os.path.join(coordinates_path, filename)
                 points = []
-                with open(filepath, "r", newline="") as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        points.append((float(row["X"]), float(row["Y"])))
-                if points:
-
-                    all_trajectories.append(points)
+                try:
+                    with open(filepath, "r", newline="") as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            points.append((float(row["X"]), float(row["Y"])))
+                    if points:
+                        all_trajectories.append(points)
+                        print(f"{Y}Debug: Loaded {len(points)} points from {filename}")
+                    else:
+                        print(f"{R}⚠ Warning: No points loaded from {filename}")
+                except Exception as e:
+                    print(f"{R}❌ Error reading coordinates file {filepath}: {e}")
+                    continue
 
     avg_points = []
     if all_trajectories:
         min_length = min(len(traj) for traj in all_trajectories)
         num_videos = len(all_trajectories)
+        print(f"{Y}Debug: Calculating average trajectory from {num_videos} trajectories with min length {min_length}")
         for i in range(min_length):
             avg_x = sum(traj[i][0] for traj in all_trajectories) / num_videos
             avg_y = sum(traj[i][1] for traj in all_trajectories) / num_videos
             avg_points.append((avg_x, avg_y))
 
-    with open(avg_coordinates_path, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["X", "Y"])
-        for x, y in avg_points:
-            writer.writerow([f"{x:.2f}", f"{y:.2f}"])
-    print(f"{G}💾 Average Coordinates of {model_name} saved to {avg_coordinates_path}\n")
+    try:
+        with open(avg_coordinates_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["X", "Y"])
+            for x, y in avg_points:
+                writer.writerow([f"{x:.2f}", f"{y:.2f}"])
+        print(f"{G}💾 Average Coordinates of {model_name} saved to {avg_coordinates_path}\n")
+    except Exception as e:
+        print(f"{R}❌ Error saving average coordinates to {avg_coordinates_path}: {e}")
 
-    # -------- Make the Trajectory Graphs
-    plt.figure(figsize=(8, 6))
-    if os.path.exists(coordinates_path):
-        for filename in os.listdir(coordinates_path):
-            if filename.endswith("_coordinates.csv"):
+    # -------- Make the Trajectory Graphs (Physics-like view)
+    try:
+        from matplotlib import cm
+        import matplotlib.pyplot as plt
+
+        plt.style.use('seaborn-v0_8-whitegrid')
+        fig, ax = plt.subplots(figsize=(14, 6))  # wider, stretched look
+
+        # Collect all coordinates
+        all_x, all_y = [], []
+        if os.path.exists(coordinates_path):
+            filenames = [f for f in os.listdir(coordinates_path) if f.endswith("_coordinates.csv")]
+            num_trajectories = len(filenames)
+            print(f"{Y}Debug: Plotting {num_trajectories} trajectories")
+
+            colors = cm.tab10(np.linspace(0, 1, max(num_trajectories, 1))) if num_trajectories > 0 else ['cyan']
+
+            for idx, filename in enumerate(sorted(filenames)):
                 filepath = os.path.join(coordinates_path, filename)
                 x_coords, y_coords = [], []
-                with open(filepath, "r", newline="") as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        x_coords.append(float(row["X"]))
-                        y_coords.append(float(row["Y"]))
-                plt.plot(x_coords, y_coords, color="cyan")
+                try:
+                    with open(filepath, "r", newline="") as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            x_coords.append(float(row["X"]))
+                            y_coords.append(float(row["Y"]))
+                    if x_coords and y_coords:
+                        all_x.extend(x_coords)
+                        all_y.extend(y_coords)
+                        
+                        # Convert to relative coordinates (start from 0,0)
+                        rel_x = [x - x_coords[0] for x in x_coords]
+                        rel_y = [y_coords[0] - y for y in y_coords]  # Flip Y to show trajectory "falling"
+                        
+                        video_name = filename.replace("_coordinates.csv", "")
+                        ax.plot(rel_x, rel_y, color=colors[idx], linewidth=2, alpha=0.8, label=f"Flight {idx+1}")
+                        ax.scatter(rel_x[0], rel_y[0], color=colors[idx], marker='o', s=100, edgecolors='black')
+                        ax.scatter(rel_x[-1], rel_y[-1], color=colors[idx], marker='s', s=100, edgecolors='black')
+                        
+                except Exception as e:
+                    print(f"{R}❌ Error reading {filepath} for plotting: {e}")
+                    continue
 
-    if avg_points:
-        avg_x_coords, avg_y_coords = zip(*avg_points)
-        plt.plot(
-            avg_x_coords,
-            avg_y_coords,
-            color="red",
-            linewidth=2,
-            label="Average Trajectory",
-        )
+        if avg_points:
+            avg_x_coords, avg_y_coords = zip(*avg_points)
+            # Convert average to relative coordinates
+            rel_avg_x = [x - avg_x_coords[0] for x in avg_x_coords]
+            rel_avg_y = [avg_y_coords[0] - y for y in avg_y_coords]
+            
+            ax.plot(rel_avg_x, rel_avg_y, color='black', linewidth=3, linestyle='--', label="Average Trajectory")
+            ax.scatter(rel_avg_x[0], rel_avg_y[0], color='darkgreen', marker='o', s=150, edgecolors='black', label="Launch Point")
+            ax.scatter(rel_avg_x[-1], rel_avg_y[-1], color='darkred', marker='s', s=150, edgecolors='black', label="Landing Point")
 
-    plt.title(f"Trajectory Graph for {model_name} v{model_version}")
-    plt.xlabel("X axis")
-    plt.ylabel("Y axis")
-    plt.gca().invert_yaxis()
-    plt.grid(True, linestyle="--", alpha=0.3)
-    if all_trajectories:
-        plt.legend()
+        # --- Stretch horizontally more ---
+        if all_x and all_y:
+            x_range = max(all_x) - min(all_x)
+            y_range = max(all_y) - min(all_y)
+            
+            x_pad = max(x_range * 0.35, 80)   # more horizontal padding
+            y_pad = max(y_range * 0.1, 20)    # less vertical padding
+            
+            ax.set_xlim(-x_pad, x_range + x_pad)
+            ax.set_ylim(min(all_y) - y_pad, max(all_y) + y_pad)
 
-    trajectory_graph_path = os.path.join(outputs_dir, "trajectory_graph.png")
-    plt.savefig(trajectory_graph_path)
-    plt.close()
-    print(f"{G}📉 Trajectory Graph saved to → {trajectory_graph_path}\n")
+        # Aspect ratio: stretch X, squash Y
+        ax.set_aspect(0.25)   # smaller = more stretched horizontally
+
+        # Research-appropriate formatting
+        ax.set_title(f"{model_name} v{model_version} - Flight Trajectory Analysis\n({num_trajectories} Test Flights)", fontsize=16, pad=20)
+        ax.set_xlabel("Horizontal Distance (relative units)", fontsize=12)
+        ax.set_ylabel("Altitude Change (relative units)", fontsize=12)
+        
+        # Add grid and professional styling
+        ax.grid(True, linestyle='--', alpha=0.7, which='both')
+        ax.set_facecolor('#f8f9fa')
+        
+        # Legend positioned outside plot area
+        if num_trajectories > 0 or avg_points:
+            ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=10, frameon=True)
+        
+        # Add annotation about distance measurement
+        ax.text(0.02, 0.98, f"Manual distance measurement used\nfor quantitative analysis", 
+                transform=ax.transAxes, fontsize=9, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+        
+        plt.tight_layout()
+        trajectory_graph_path = os.path.join(outputs_dir, "trajectory_graph.png")
+        plt.savefig(trajectory_graph_path, dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        print(f"{G}📉 Research-ready trajectory graph saved to → {trajectory_graph_path}\n")
+        
+    except Exception as e:
+        print(f"{R}❌ Error generating trajectory graph: {e}")
+
+
 
     # Generate enhanced Markdown report with UTF-8 encoding
     report_path = os.path.join(outputs_dir, 'report.md')
     try:
         with open(report_path, 'w', encoding='utf-8') as f:
-            # Header
             f.write(f'# ✈️ {model_name} v{model_version} Flight Report\n\n')
-
-            # Overview
             f.write('## Overview\n')
             if os.path.exists(os.path.join(outputs_dir, 'model_picture.jpg')):
                 f.write('![Model Design](model_picture.jpg)\n')
@@ -462,7 +545,6 @@ def log_new_model(model_name=None, model_version=1.0):
             f.write(f'- **Design Notes**: {design_notes}\n')
             f.write(f'- **Created**: {datetime.now().strftime("%Y-%m-%d %I:%M %p +06")}\n\n')
 
-            # Trajectory Graph
             f.write('## Trajectory Graph\n')
             if os.path.exists(os.path.join(outputs_dir, 'trajectory_graph.png')):
                 f.write('![Flight Trajectory](trajectory_graph.png)\n')
@@ -473,7 +555,6 @@ def log_new_model(model_name=None, model_version=1.0):
             is_best_distance = True
             is_most_stable = False
 
-            # Average Metrics
             avg_metrics = {}
             metrics_path = os.path.join(outputs_dir, 'avg_metrics.csv')
             if os.path.exists(metrics_path):
@@ -490,9 +571,8 @@ def log_new_model(model_name=None, model_version=1.0):
                 f.write('| Metric    | Value      |\n')
                 f.write('|--|--|\n')
                 for metric, value in avg_metrics.items():
-                    f.write(f'| {metric} | {value:.2f} {"px" if metric == "Distance" else "s" if metric == "Airtime" else "px/s" if metric == "Speed" else ""} |\n')
-                
-                # Check for achievement (compare to other versions)
+                    f.write(f'| {metric} | {value:.2f} {"m" if metric == "Distance" else "s" if metric == "Airtime" else "m/s" if metric == "Speed" else ""} |\n')
+
                 model_dir = os.path.join('outputs', model_name)
                 max_distance = avg_metrics['Distance']
                 if os.path.exists(model_dir):
@@ -511,7 +591,6 @@ def log_new_model(model_name=None, model_version=1.0):
                 f.write('No flight data recorded! Conduct tests, engineer! ✈️\n')
             f.write('\n')
 
-            # Per-Video Analysis
             video_metrics = []
             flight_metrics_dir = os.path.join(outputs_dir, 'Flight Metrics')
             if os.path.exists(flight_metrics_dir) and os.listdir(flight_metrics_dir):
@@ -529,27 +608,29 @@ def log_new_model(model_name=None, model_version=1.0):
                                     'Stability': float(row['Stability']),
                                     'Performance Note': ''
                                 })
-                # Tag performance notes
                 if video_metrics:
                     max_distance = max(vm['Distance'] for vm in video_metrics)
                     max_stability = max(vm['Stability'] for vm in video_metrics)
                     for vm in video_metrics:
                         if vm['Distance'] == max_distance:
                             vm['Performance Note'] = 'Longest flight'
-                        elif vm['Stability'] == max_stability:
+                        if vm['Stability'] == max_stability:
                             is_most_stable = True
-                            vm['Performance Note'] = 'Most stable'
-                   
+                            vm['Performance Note'] = 'Most stable' if not vm['Performance Note'] else vm['Performance Note'] + ', Most stable'
+
+                f.write('## Per-Video Analysis\n')
+                f.write('| Video | Distance(m) | Airtime(s) | Speed(m/s) | Stability | Note |\n')
+                f.write('|--|--|--|--|--|--|\n')
+                for vm in video_metrics:
+                    f.write(f"| {vm['Video Name']} | {vm['Distance']:.2f} | {vm['Airtime']:.2f} | {vm['Speed']:.2f} | {vm['Stability']:.2f} | {vm['Performance Note']} |\n")
             else:
                 f.write('## Per-Video Analysis\n')
                 f.write('No flight data recorded! Conduct tests, engineer! ✈️\n')
             f.write('\n')
 
-            # Summary   
             f.write('## Summary\n')
-            f.write(f'- {("Satisfictory distance" if is_best_distance else "Great Distance coverage" if distance_px > 770 else "The distance is not satisfying!")}\n')
-            f.write(f'- {'Really Stable' if is_most_stable else 'Strong stability' if stability_score > 7 else 'fairly stable' if stability_score > 5 else 'Unacceptably Bad stablity, Please consider optimal weight distribution and add dihedral'}')           
-            # Social Prompt
+            f.write(f'- {"Best distance" if is_best_distance else "Great distance coverage" if avg_distance > 50 else "The distance is not satisfying!"}\n')
+            f.write(f'- {"Really Stable" if is_most_stable else "Strong stability" if stability_score > 7 else "Fairly stable" if stability_score > 5 else "Unacceptably bad stability, please consider optimal weight distribution and add dihedral"}\n')
             f.write('\n---\n')
             f.write('**Share your findings on X with #LucidraftDeltaX to discuss with the research community! 🚀**\n')
 
@@ -558,8 +639,7 @@ def log_new_model(model_name=None, model_version=1.0):
         print(f"{R}❌ Turbulence! Failed to generate report: {e}. Check files and try again! ✈️")
 
     # one-liner
-    print(f'{B}✈  {model_name} v{model_version} → distance:{distance_m}m, speed:{speed}m/s, stability:{stability_score}')
-
+    print(f'{B}✈  {model_name} v{model_version} → distance:{distance_m:.2f}m, speed:{speed:.2f}m/s, stability:{stability_score:.2f}')
 
     return model_name, model_version
 
