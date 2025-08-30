@@ -55,22 +55,6 @@ def pause():
 breakw = False
 rerun_req = 'please try to run the program again!'
 
-# Setup
-# Input for real world metrics
-# ref_obj_m = None
-# ref_obj_px = None
-# if not ref_obj_px and not ref_obj_m:
-#     print(f'{B}\nBefore we begin, I need to know the px per meter for the video. For this, Measure an object in the video and then measer its length in pixels so that we can give you distance\nin meters rather than in pixels (required!)')
-#     try:
-#         ref_obj_m = float(input(f'{Y}📏 Length of reference object in meters (e.g., 1.0 for a 1-meter stick): {W}').strip())
-#         ref_obj_px = float(input(f'{Y}👾 Pixel length of reference object in video (e.g., 100.0 pixels): {W}').strip())
-#         px_per_m = float(ref_obj_px / ref_obj_m)
-#         print(f'\n{G}🤗 We are done, thanks for your patience!')
-#     except:
-#         print(f'{R}⚠  Please provide inputs as numbers, {rerun_req}')
-#         breakw = True
-        
-
 def homepage():
     banner()
     print(B + " [1]" + W + " ➕ Add New Model")
@@ -84,9 +68,14 @@ def homepage():
     return input(Y + "Select an option (1-7): " + W).strip()
 
 # ===== Log New Model =====
-# import numpy as np  # Ensure numpy is imported globally
-def log_new_model(model_name=None, model_version=1.0):
+def flip_x(flight):
+    """Flip trajectory horizontally for better visualization"""
+    if not flight:
+        return flight
+    max_x = max(x for x, _ in flight)
+    return [(max_x - x, y) for x, y in flight]
 
+def log_new_model(model_name=None, model_version=1.0):
     global breakw
     need = "Add" if not model_name else 'Update'
     print(C + f"\n--- {need} New Model ---\n")
@@ -104,13 +93,17 @@ def log_new_model(model_name=None, model_version=1.0):
     
     outputs_dir = os.path.join("outputs", model_name, str(model_version))
     if os.path.exists(outputs_dir):
-        con = input(f'{M}Seems like a model named {model_name} already exists, do you want to change it?(y/N): {W}')
-        if con == 'y'.lower():
+        con = input(f'{M}Seems like a model named {model_name} already exists, do you want to change it?(y/N): {W}').lower()
+        if con == 'y':
             os.makedirs(outputs_dir, exist_ok=True)
-        elif con == 'n'.lower():
-            model_name = input(f'{Y}✒ Enter a different model name: {W}')
+        elif con == 'n':
+            model_name = input(f'{Y}✒ Enter a different model name: {W}').strip()
+            if not model_name:
+                print(f'{R}❌ Invalid model name, {rerun_req}')
+                return None
+            outputs_dir = os.path.join("outputs", model_name, str(model_version))
         else:
-            print(f'{Y}❌ Process terminated because of wrong input,{rerun_req}')
+            print(f'{Y}❌ Process terminated because of wrong input, {rerun_req}')
             return None
 
     def path_validation_msg():
@@ -121,24 +114,24 @@ def log_new_model(model_name=None, model_version=1.0):
     in_videos_path = input(Y + "🎥 Flight Videos (comma separated): " + W).strip()
     videos_dir = os.path.join(outputs_dir, "Flight Videos")
     os.makedirs(videos_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(picture_path), exist_ok=True)
 
     # Media validation and copying
-    if os.path.exists(in_picture_path):
+    if in_picture_path and os.path.exists(in_picture_path):
         img = cv.imread(in_picture_path)
         if img is not None:
             cv.imwrite(picture_path, img)
             print(G + f"\n✅ Picture saved → {picture_path}")
         else:
             print(R + f"\n❌ Error: Could not read image from '{in_picture_path}'")
-    else:
+    elif in_picture_path:
         print(R + f"\n❌ Error: Image path '{in_picture_path}' does not exist.")
-        retry_path = input(f"{Y}📷 Please enter a valid picture path: {W}").strip()
-        if os.path.exists(retry_path):
+        retry_path = input(f"{Y}📷 Please enter a valid picture path (or press Enter to skip): {W}").strip()
+        if retry_path and os.path.exists(retry_path):
             cv.imwrite(picture_path, cv.imread(retry_path))
             print(G + f"\n✅ Picture saved → {picture_path}")
-        else:
+        elif retry_path:
             path_validation_msg()
-            return None
 
     # Parse and validate video paths, removing duplicates
     video_paths = list(dict.fromkeys([v.strip() for v in in_videos_path.split(",") if v.strip()])) if in_videos_path else []
@@ -148,6 +141,7 @@ def log_new_model(model_name=None, model_version=1.0):
         print(f"{R}❌ No valid video paths provided. Please provide at least one valid video.")
         return None
 
+    valid_videos = []
     for video_path in video_paths:
         if os.path.exists(video_path):
             try:
@@ -157,6 +151,7 @@ def log_new_model(model_name=None, model_version=1.0):
                     continue
                 cap.release()
                 shutil.copy(video_path, videos_dir)
+                valid_videos.append(video_path)
                 print(G + f"✅ Copied video to → {os.path.join(videos_dir, os.path.basename(video_path))}")
             except Exception as e:
                 print(f"{R}❌ Error accessing video '{video_path}': {e}")
@@ -165,19 +160,20 @@ def log_new_model(model_name=None, model_version=1.0):
             print(f"{R}❌ Video not found: {video_path}")
             continue
 
-    print(G + f"✅ Videos saved → {videos_dir}")
+    video_paths = valid_videos
     video_count = len(video_paths)
 
     if video_count == 0:
         print(f"{R}❌ No valid videos to process. Aborting.")
         return None
 
+    print(G + f"✅ Videos saved → {videos_dir}")
     preview_mode = True  # toggle this if you don't want preview
 
     # ------ Save datas ------
     metadata_path = os.path.join(outputs_dir, "metadata.txt")
     try:
-        with open(metadata_path, "w") as f:
+        with open(metadata_path, "w", encoding='utf-8') as f:
             f.write(f"Model Name: {model_name}\n")
             f.write(f"Version: {model_version}\n")
             f.write(f"Design Notes: {design_notes}\n")
@@ -187,6 +183,10 @@ def log_new_model(model_name=None, model_version=1.0):
         return None
 
     # per video processing
+    total_distance = 0
+    total_stability = 0
+    videos_processed = 0
+    
     for video_path in video_paths:
         trajectory_points = []
         frame_count = 0
@@ -230,11 +230,21 @@ def log_new_model(model_name=None, model_version=1.0):
         bbox = cv.selectROI("Select Plane", first_frame, False)
         cv.destroyWindow("Select Plane")
 
+        if bbox[2] == 0 or bbox[3] == 0:
+            print(f"{R}❌ No selection made for video {video_path}. Skipping.")
+            cap.release()
+            continue
+
         # --- Step 3: init tracker ---
         try:
             tracker = cv.legacy.TrackerCSRT_create()
         except AttributeError:
-            tracker = cv.TrackerCSRT_create()
+            try:
+                tracker = cv.TrackerCSRT_create()
+            except AttributeError:
+                print(f"{R}❌ CSRT tracker not available. Skipping video.")
+                cap.release()
+                continue
         tracker.init(first_frame, bbox)
 
         # --- Step 4: start tracking ---
@@ -281,7 +291,7 @@ def log_new_model(model_name=None, model_version=1.0):
         )
         os.makedirs(os.path.dirname(coordinates_path_f), exist_ok=True)
         try:
-            with open(coordinates_path_f, "w", newline="") as f:
+            with open(coordinates_path_f, "w", newline="", encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(["X", "Y"])
                 for x, y in trajectory_points:
@@ -294,7 +304,8 @@ def log_new_model(model_name=None, model_version=1.0):
 
         # Prompt user for distance in meters
         try:
-            distance_m = float(input(f"    {C}📏 Enter flight distance for {video_n} in meters (e.g., 10.5): {W}"))
+            distance_input = input(f"    {C}📏 Enter flight distance for {video_n} in meters (e.g., 10.5): {W}")
+            distance_m = float(distance_input)
             if distance_m < 0:
                 print(f"    {R}⚠ Distance must be non-negative. Setting to 0.")
                 distance_m = 0
@@ -314,7 +325,8 @@ def log_new_model(model_name=None, model_version=1.0):
 
         # Take the stability score as input from user
         try:
-            stability_score = float(input(f"    {C}📝 Enter stability score for {model_name} (0-10): {W}"))
+            stability_input = input(f"    {C}📝 Enter stability score for {model_name} (0-10): {W}")
+            stability_score = float(stability_input)
             if stability_score > 10:
                 print(f"    {M} We understand you might be amused of its stability, bro just go with 10 if you like it then! The good news though, you don't have to because we will count it as 10.")
                 stability_score = 10
@@ -330,21 +342,27 @@ def log_new_model(model_name=None, model_version=1.0):
         )
         os.makedirs(os.path.dirname(metrics_path_f), exist_ok=True)
         try:
-            with open(metrics_path_f, "w", newline="") as f:
+            with open(metrics_path_f, "w", newline="", encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(["Distance(m)", "Airtime(s)", "Speed(m/s)", "Stability"])
-                writer.writerow(
-                    [
-                        f"{distance_m:.2f}",
-                        f"{airtime:.2f}",
-                        f"{speed:.2f}",
-                        stability_score,
-                    ]
-                )
+                writer.writerow([
+                    f"{distance_m:.2f}",
+                    f"{airtime:.2f}",
+                    f"{speed:.2f}",
+                    stability_score,
+                ])
             print(f"    {B}📐 Metrics saved to {metrics_path_f}\n")
+            
+            total_distance += distance_m
+            total_stability += stability_score
+            videos_processed += 1
         except Exception as e:
             print(f"{R}❌ Error saving metrics to {metrics_path_f}: {e}")
             continue
+
+    if videos_processed == 0:
+        print(f"{R}❌ No videos were successfully processed. Aborting.")
+        return None
 
     # ---- Averages -----
     tot_distance = tot_airtime = tot_speed = tot_stability = 0
@@ -356,7 +374,7 @@ def log_new_model(model_name=None, model_version=1.0):
             if filename.endswith("_metrics.csv"):
                 filepath = os.path.join(metrics_path, filename)
                 try:
-                    with open(filepath, "r", newline="") as f:
+                    with open(filepath, "r", newline="", encoding='utf-8') as f:
                         reader = csv.DictReader(f)
                         for row in reader:
                             tot_distance += float(row["Distance(m)"])
@@ -375,17 +393,15 @@ def log_new_model(model_name=None, model_version=1.0):
 
     avg_metrics_path = os.path.join(outputs_dir, "avg_metrics.csv")
     try:
-        with open(avg_metrics_path, "w", newline="") as f:
+        with open(avg_metrics_path, "w", newline="", encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow(["Distance(m)", "Airtime(s)", "Speed(m/s)", "Stability"])
-            writer.writerow(
-                [
-                    f"{avg_distance:.2f}",
-                    f"{avg_airtime:.2f}",
-                    f"{avg_speed:.2f}",
-                    f"{avg_stability:.2f}",
-                ]
-            )
+            writer.writerow([
+                f"{avg_distance:.2f}",
+                f"{avg_airtime:.2f}",
+                f"{avg_speed:.2f}",
+                f"{avg_stability:.2f}",
+            ])
         print(f"{G}💾 Average metrics of {model_name} saved to {avg_metrics_path}")
     except Exception as e:
         print(f"{R}❌ Error saving average metrics to {avg_metrics_path}: {e}")
@@ -401,7 +417,7 @@ def log_new_model(model_name=None, model_version=1.0):
                 filepath = os.path.join(coordinates_path, filename)
                 points = []
                 try:
-                    with open(filepath, "r", newline="") as f:
+                    with open(filepath, "r", newline="", encoding='utf-8') as f:
                         reader = csv.DictReader(f)
                         for row in reader:
                             points.append((float(row["X"]), float(row["Y"])))
@@ -425,7 +441,7 @@ def log_new_model(model_name=None, model_version=1.0):
             avg_points.append((avg_x, avg_y))
 
     try:
-        with open(avg_coordinates_path, "w", newline="") as f:
+        with open(avg_coordinates_path, "w", newline="", encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow(["X", "Y"])
             for x, y in avg_points:
@@ -434,101 +450,124 @@ def log_new_model(model_name=None, model_version=1.0):
     except Exception as e:
         print(f"{R}❌ Error saving average coordinates to {avg_coordinates_path}: {e}")
 
-    # -------- Make the Trajectory Graphs (Physics-like view)
+    # -------- Enhanced Trajectory Graphs (Dark Mode Physics-like view) --------
     try:
         from matplotlib import cm
         import matplotlib.pyplot as plt
+        import numpy as np
 
-        plt.style.use('seaborn-v0_8-whitegrid')
-        fig, ax = plt.subplots(figsize=(14, 6))  # wider, stretched look
+        fig, ax = plt.subplots(figsize=(16, 9))
+        fig.patch.set_facecolor('#121212')
+        ax.set_facecolor('#121212')
 
-        # Collect all coordinates
+        # Collect all coordinates and flip them
+        all_trajectories_flipped = []
         all_x, all_y = [], []
+        
         if os.path.exists(coordinates_path):
             filenames = [f for f in os.listdir(coordinates_path) if f.endswith("_coordinates.csv")]
             num_trajectories = len(filenames)
-            print(f"{Y}Debug: Plotting {num_trajectories} trajectories")
-
-            colors = cm.tab10(np.linspace(0, 1, max(num_trajectories, 1))) if num_trajectories > 0 else ['cyan']
+            print(f"{Y}Debug: Plotting {num_trajectories} trajectories with enhanced dark mode")
 
             for idx, filename in enumerate(sorted(filenames)):
                 filepath = os.path.join(coordinates_path, filename)
-                x_coords, y_coords = [], []
+                trajectory_points = []
                 try:
-                    with open(filepath, "r", newline="") as f:
+                    with open(filepath, "r", newline="", encoding='utf-8') as f:
                         reader = csv.DictReader(f)
                         for row in reader:
-                            x_coords.append(float(row["X"]))
-                            y_coords.append(float(row["Y"]))
-                    if x_coords and y_coords:
-                        all_x.extend(x_coords)
-                        all_y.extend(y_coords)
+                            trajectory_points.append((float(row["X"]), float(row["Y"])))
+                    
+                    if trajectory_points:
+                        # Flip the trajectory for better visualization
+                        flipped_trajectory = flip_x(trajectory_points)
+                        all_trajectories_flipped.append(flipped_trajectory)
                         
-                        # Convert to relative coordinates (start from 0,0)
-                        rel_x = [x - x_coords[0] for x in x_coords]
-                        rel_y = [y_coords[0] - y for y in y_coords]  # Flip Y to show trajectory "falling"
+                        # Extract coordinates for plotting
+                        xs, ys = zip(*flipped_trajectory)
+                        all_x.extend(xs)
+                        all_y.extend(ys)
                         
-                        video_name = filename.replace("_coordinates.csv", "")
-                        ax.plot(rel_x, rel_y, color=colors[idx], linewidth=2, alpha=0.8, label=f"Flight {idx+1}")
-                        ax.scatter(rel_x[0], rel_y[0], color=colors[idx], marker='o', s=100, edgecolors='black')
-                        ax.scatter(rel_x[-1], rel_y[-1], color=colors[idx], marker='s', s=100, edgecolors='black')
+                        # Plot individual flights with low opacity
+                        ax.plot(xs, ys, color='#80c1ff', alpha=0.25, linewidth=2, label=f"Flight {idx+1}")
+                        
+                        # Start/end markers for each flight
+                        ax.scatter(xs[0], ys[0], color='#7fff00', marker='o', s=80, edgecolors='white', alpha=0.8)
+                        ax.scatter(xs[-1], ys[-1], color='#ff4500', marker='X', s=100, edgecolors='white', alpha=0.8)
                         
                 except Exception as e:
-                    print(f"{R}❌ Error reading {filepath} for plotting: {e}")
+                    print(f"{R}❌ Error reading {filepath} for enhanced plotting: {e}")
                     continue
 
+        # Plot average trajectory if available
         if avg_points:
-            avg_x_coords, avg_y_coords = zip(*avg_points)
-            # Convert average to relative coordinates
-            rel_avg_x = [x - avg_x_coords[0] for x in avg_x_coords]
-            rel_avg_y = [avg_y_coords[0] - y for y in avg_y_coords]
-            
-            ax.plot(rel_avg_x, rel_avg_y, color='black', linewidth=3, linestyle='--', label="Average Trajectory")
-            ax.scatter(rel_avg_x[0], rel_avg_y[0], color='darkgreen', marker='o', s=150, edgecolors='black', label="Launch Point")
-            ax.scatter(rel_avg_x[-1], rel_avg_y[-1], color='darkred', marker='s', s=150, edgecolors='black', label="Landing Point")
+            avg_flipped = flip_x(avg_points)
+            if avg_flipped:
+                avg_x, avg_y = zip(*avg_flipped)
+                all_x.extend(avg_x)
+                all_y.extend(avg_y)
+                
+                # Plot average trajectory bold with distinctive styling
+                ax.plot(avg_x, avg_y, color='#ff6f61', linewidth=4, label="Average Trajectory")
+                # Add scatter points along average trajectory for emphasis
+                ax.scatter(avg_x[::5], avg_y[::5], color='#ff6f61', s=80, edgecolors='white', alpha=0.9)
+                
+                # Special markers for average trajectory start/end
+                ax.scatter(avg_x[0], avg_y[0], color='#00ff7f', marker='o', s=150, edgecolors='white', label="Launch Point", zorder=10)
+                ax.scatter(avg_x[-1], avg_y[-1], color='#ff1493', marker='s', s=150, edgecolors='white', label="Landing Point", zorder=10)
 
-        # --- Stretch horizontally more ---
+        # Enhanced styling and layout
         if all_x and all_y:
-            x_range = max(all_x) - min(all_x)
-            y_range = max(all_y) - min(all_y)
-            
-            x_pad = max(x_range * 0.35, 80)   # more horizontal padding
-            y_pad = max(y_range * 0.1, 20)    # less vertical padding
-            
-            ax.set_xlim(-x_pad, x_range + x_pad)
-            ax.set_ylim(min(all_y) - y_pad, max(all_y) + y_pad)
+            # Compute limits with padding
+            all_x_array = np.array(all_x)
+            all_y_array = np.array(all_y)
+            x_pad = (all_x_array.max() - all_x_array.min()) * 0.03
+            y_pad = (all_y_array.max() - all_y_array.min()) * 0.03
+            ax.set_xlim(all_x_array.min() - x_pad, all_x_array.max() + x_pad)
+            ax.set_ylim(all_y_array.min() - y_pad, all_y_array.max() + y_pad)
 
-        # Aspect ratio: stretch X, squash Y
-        ax.set_aspect(0.25)   # smaller = more stretched horizontally
-
-        # Research-appropriate formatting
-        ax.set_title(f"{model_name} v{model_version} - Flight Trajectory Analysis\n({num_trajectories} Test Flights)", fontsize=16, pad=20)
-        ax.set_xlabel("Horizontal Distance (relative units)", fontsize=12)
-        ax.set_ylabel("Altitude Change (relative units)", fontsize=12)
+        # Dark mode professional styling
+        ax.set_title(f"{model_name} v{model_version} - Flight Trajectory Analysis\n({num_trajectories} Test Flights)", 
+                    fontsize=18, pad=25, color='white', weight='bold')
+        ax.set_xlabel("Horizontal Distance (relative units)", fontsize=14, color='white')
+        ax.set_ylabel("Vertical Position (relative units)", fontsize=14, color='white')
         
-        # Add grid and professional styling
-        ax.grid(True, linestyle='--', alpha=0.7, which='both')
-        ax.set_facecolor('#f8f9fa')
+        # Enhanced grid and styling
+        ax.grid(True, linestyle="--", alpha=0.4, color='gray')
+        ax.tick_params(colors='white', labelsize=11)
+        ax.set_aspect('auto')
+        ax.invert_yaxis()  # Invert Y-axis for realistic flight visualization
         
-        # Legend positioned outside plot area
+        # Professional legend inside graph
         if num_trajectories > 0 or avg_points:
-            ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=10, frameon=True)
+            ax.legend(
+                loc='upper right',
+                facecolor='#1f1f1f',
+                edgecolor='white',
+                labelcolor='white',
+                fontsize=12,
+                framealpha=0.9,
+                shadow=True
+            )
         
-        # Add annotation about distance measurement
-        ax.text(0.02, 0.98, f"Manual distance measurement used\nfor quantitative analysis", 
-                transform=ax.transAxes, fontsize=9, verticalalignment='top',
-                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+        # Add professional annotation
+        ax.text(0.02, 0.02, f"Enhanced trajectory analysis\n{model_name} aerodynamic study", 
+                transform=ax.transAxes, fontsize=10, color='lightgray',
+                verticalalignment='bottom',
+                bbox=dict(boxstyle='round,pad=0.5', facecolor='#1f1f1f', alpha=0.8, edgecolor='gray'))
         
-        plt.tight_layout()
+        # Center the axes within the figure
+        fig.subplots_adjust(left=0.07, right=0.93, top=0.93, bottom=0.07)
+        
+        # Save the enhanced graph
         trajectory_graph_path = os.path.join(outputs_dir, "trajectory_graph.png")
-        plt.savefig(trajectory_graph_path, dpi=300, bbox_inches='tight', facecolor='white')
+        plt.savefig(trajectory_graph_path, dpi=300, bbox_inches='tight', 
+                    facecolor='#121212', edgecolor='none')
         plt.close()
-        print(f"{G}📉 Research-ready trajectory graph saved to → {trajectory_graph_path}\n")
+        print(f"{G}📉 Enhanced dark mode trajectory graph saved to → {trajectory_graph_path}\n")
         
     except Exception as e:
-        print(f"{R}❌ Error generating trajectory graph: {e}")
-
-
+        print(f"{R}❌ Error generating enhanced trajectory graph: {e}")
 
     # Generate enhanced Markdown report with UTF-8 encoding
     report_path = os.path.join(outputs_dir, 'report.md')
@@ -556,9 +595,9 @@ def log_new_model(model_name=None, model_version=1.0):
             is_most_stable = False
 
             avg_metrics = {}
-            metrics_path = os.path.join(outputs_dir, 'avg_metrics.csv')
-            if os.path.exists(metrics_path):
-                with open(metrics_path, 'r', encoding='utf-8') as mf:
+            metrics_path_check = os.path.join(outputs_dir, 'avg_metrics.csv')
+            if os.path.exists(metrics_path_check):
+                with open(metrics_path_check, 'r', encoding='utf-8') as mf:
                     reader = csv.DictReader(mf)
                     for row in reader:
                         avg_metrics = {
@@ -630,7 +669,7 @@ def log_new_model(model_name=None, model_version=1.0):
 
             f.write('## Summary\n')
             f.write(f'- {"Best distance" if is_best_distance else "Great distance coverage" if avg_distance > 50 else "The distance is not satisfying!"}\n')
-            f.write(f'- {"Really Stable" if is_most_stable else "Strong stability" if stability_score > 7 else "Fairly stable" if stability_score > 5 else "Unacceptably bad stability, please consider optimal weight distribution and add dihedral"}\n')
+            f.write(f'- {"Really Stable" if is_most_stable else "Strong stability" if avg_stability > 7 else "Fairly stable" if avg_stability > 5 else "Unacceptably bad stability, please consider optimal weight distribution and add dihedral"}\n')
             f.write('\n---\n')
             f.write('**Share your findings on X with #LucidraftDeltaX to discuss with the research community! 🚀**\n')
 
@@ -638,8 +677,8 @@ def log_new_model(model_name=None, model_version=1.0):
     except Exception as e:
         print(f"{R}❌ Turbulence! Failed to generate report: {e}. Check files and try again! ✈️")
 
-    # one-liner
-    print(f'{B}✈  {model_name} v{model_version} → distance:{distance_m:.2f}m, speed:{speed:.2f}m/s, stability:{stability_score:.2f}')
+    # one-liner summary
+    print(f'{B}✈  {model_name} v{model_version} → distance:{avg_distance:.2f}m, speed:{avg_speed:.2f}m/s, stability:{avg_stability:.2f}')
 
     return model_name, model_version
 
@@ -689,15 +728,18 @@ def view_models():
             for version in os.listdir(model_path):
                 version_path = os.path.join(model_path, version, 'avg_metrics.csv')
                 if os.path.exists(version_path):
-                    with open(version_path, 'r') as f:
-                        reader = csv.DictReader(f)
-                        for row in reader:
-                            models[model_name].append({
-                                'version': str(version),
-                                'distance': f"{float(row['Distance(m)']):.2f}",
-                                'speed': f"{float(row['Speed(m/s)']):.2f}",
-                                'stability': f"{float(row['Stability']):.2f}"
-                            })
+                    try:
+                        with open(version_path, 'r', encoding='utf-8') as f:
+                            reader = csv.DictReader(f)
+                            for row in reader:
+                                models[model_name].append({
+                                    'version': str(version),
+                                    'distance': f"{float(row['Distance(m)']):.2f}",
+                                    'speed': f"{float(row['Speed(m/s)']):.2f}",
+                                    'stability': f"{float(row['Stability']):.2f}"
+                                })
+                    except (ValueError, KeyError) as e:
+                        console.print(f"[red]❌ Error reading metrics for {model_name} v{version}: {e}")
 
     console.print(create_combined_table(models))
     return models
@@ -709,54 +751,91 @@ def get_prev_v(model_name):
         return None
     vs = []
     for v in os.listdir(model_path):
-        vs.append(float(v))
+        try:
+            vs.append(float(v))
+        except ValueError:
+            continue
     
-    return max(vs)
+    return max(vs) if vs else None
 
 
 def update_model():
-    model_name = input(f'\n{Y}Model Name: {W}')
+    model_name = input(f'\n{Y}Model Name: {W}').strip()
+    if not model_name:
+        print(f'{R}⚠ Please provide a valid model name, {rerun_req}')
+        return
     if not os.path.exists(f'outputs/{model_name}'):
         print(f'{R}⚠ No models found! Please first create one, then update if needed')
     else:
         prev_version = get_prev_v(model_name)
+        if prev_version is None:
+            print(f'{R}⚠ No valid versions found for model {model_name}')
+            return
         new_version = round(prev_version + 0.1, 1)
-        log_new_model(model_name, new_version)
-        compare(model_name, prev_version, model_name, new_version, fauto=True)
+        result = log_new_model(model_name, new_version)
+        if result:
+            compare(model_name, prev_version, model_name, new_version, fauto=True)
 
 # ===================== Delete Model =============
 def delete_model():
-    print(Text('\n--- Delete Model ---', style='blue bold'))
-    mv = input(f'\n{Y}Model name(include version with a space after model if you want a specific version to be deleted): {W}')
-    if mv:
-        model = mv.split(' ')[0] 
-    else:
+    console.print('[blue bold]\n--- Delete Model ---')
+    mv = input(f'\n{Y}Model name (include version with a space after model if you want a specific version to be deleted): {W}').strip()
+    if not mv:
         print(f'{Y} Invalid input! {rerun_req}')
         return None
-    version = None
-    try:
-        if len(mv.split(' ')) >= 2 and len(mv.split(' ')) < 3:
-            version = mv.split(' ')[1]
-        elif len(mv.split(' ')) >= 3:
-            print(f'{R} Please first enter the model name and if you want to delete just one version of that model, just add space after the model name and write down the version in float\n. Multiple version deletion is not supported!')
-        
-        shutil.rmtree(f'outputs/{model}/{version if version else ''}')
-        print(f'{G}Successfully removed {model} {version if version else ''}!')
-    except:
-        print(f"{R}⚠ Please give input in valid format, the model name only if you want to delete the entire model and to only delte a version of a model, after typing the model name, hit space and type version in float(e.g, 'Eagle 1.0')")
-
-# =============== Comare Model ===============
-def compare(model1_name=None, model1_v=None, model_name2=None, model2_v=None, fauto=False):
-    if not model1_name and not model1_v and not model_name2 and not model2_v:
+    
+    parts = mv.split()
+    if len(parts) == 1:
+        model = parts[0]
+        version = None
+    elif len(parts) == 2:
+        model, version = parts
         try:
-            model1_name, model1_v = input(f"{Y} Please enter the first model's name and version(model's name <space> version): {W}").split(' ')
-            model_name2, model2_v = input(f"{Y} Please enter the second model's name and version(model's name <space> version): {W}").split(' ')
+            float(version)  # Validate version format
+        except ValueError:
+            print(f'{R} Version must be a number (e.g., 1.0)')
+            return
+    else:
+        print(f'{R} Please enter model name only, or model name followed by version (e.g., "Eagle 1.0")')
+        return
+        
+    try:
+        target_path = os.path.join('outputs', model, version) if version else os.path.join('outputs', model)
+        if os.path.exists(target_path):
+            shutil.rmtree(target_path)
+            print(f'{G}Successfully removed {model} {version if version else "(all versions)"}!')
+        else:
+            print(f'{R}⚠ Path not found: {target_path}')
+    except Exception as e:
+        print(f"{R}⚠ Error deleting: {e}")
+
+# =============== Compare Model ===============
+def compare(model1_name=None, model1_v=None, model_name2=None, model2_v=None, fauto=False):
+    if not all([model1_name, model1_v, model_name2, model2_v]):
+        try:
+            input1 = input(f"{Y} Please enter the first model's name and version (model's name <space> version): {W}").strip().split()
+            input2 = input(f"{Y} Please enter the second model's name and version (model's name <space> version): {W}").strip().split()
+            
+            if len(input1) != 2 or len(input2) != 2:
+                print(f'{R}⚠ Invalid input format, use "model_name version" (e.g., "Eagle 1.0"), {rerun_req}')
+                return
+                
+            model1_name, model1_v = input1
+            model_name2, model2_v = input2
+            
+            # Validate model names
             if not re.match(r'^[a-zA-Z0-9_-]+$', model1_name) or not re.match(r'^[a-zA-Z0-9_-]+$', model_name2):
                 print(f'{R}⚠ Model names must be alphanumeric, underscores, or hyphens, {rerun_req}')
                 return
-            if not re.match(r'^\d+\.\d$', model1_v) or not re.match(r'^\d+\.\d$', model2_v):
-                print(f'{R}⚠ Versions must be floats (e.g., 1.0), {rerun_req}')
+            
+            # Validate versions
+            try:
+                float(model1_v)
+                float(model2_v)
+            except ValueError:
+                print(f'{R}⚠ Versions must be numbers (e.g., 1.0), {rerun_req}')
                 return
+                
         except ValueError:
             print(f'{R}⚠ Invalid input format, use "model_name version" (e.g., "Eagle 1.0"), {rerun_req}')
             return
@@ -769,71 +848,56 @@ def compare(model1_name=None, model1_v=None, model_name2=None, model2_v=None, fa
             return
 
         # Read and store both model's metrics
-        with open(path1, 'r') as f:
+        with open(path1, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             row = next(reader, None)
             if row is None or any(k not in row for k in ["Distance(m)", "Speed(m/s)", "Stability"]):
                 print(f'{R}⚠ Invalid metrics file {path1}, {rerun_req}')
                 return
 
-            model1 = {
-                'Name': {model1_name},
-                'Distance': float(row["Distance(m)"]),
-                'Stability': float(row["Stability"]),
-                'Speed': float(row['Speed(m/s)'])
-            }
-            model1_distance = model1['Distance']
-            model1_speed = model1['Speed']
-            model1_stability = model1["Stability"]
+            model1_distance = float(row["Distance(m)"])
+            model1_speed = float(row['Speed(m/s)'])
+            model1_stability = float(row["Stability"])
         
-        with open(path2, 'r') as f:
+        with open(path2, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             row = next(reader, None)
             if row is None or any(k not in row for k in ["Distance(m)", "Speed(m/s)", "Stability"]):
                 print(f'{R}⚠ Invalid metrics file {path2}, {rerun_req}')
                 return
             
-            model2 = {
-                'Name': {model1_name},
-                'Distance': float(row["Distance(m)"]),
-                'Stability': float(row["Stability"]),
-                'Speed': float(row['Speed(m/s)'])
-            }
-
-            model2_distance = model2['Distance']
-            model2_speed = model2['Speed']
-            model2_stability = model2["Stability"]
+            model2_distance = float(row["Distance(m)"])
+            model2_speed = float(row['Speed(m/s)'])
+            model2_stability = float(row["Stability"])
 
         # Compare metrics
-        note = ''
         winner = "No one! it's a tie!"
-        tie = True if winner == 'No one! it\'s a tie!' else False
-        if not model1_distance == model2_distance:
-            dwinner = max([model1_distance, model2_distance])
-            stwinner = max([model1_stability, model2_stability])
-            swinner = max([model1_speed, model2_speed])
-            winner = (
-                f"{model1_name} v{model1_v}" if model1_distance == dwinner else f"{model_name2} v{model2_v}"
-            )
-            lost = (f"{model1_name} v{model1_v}" if model1_distance != dwinner else f"{model_name2} v{model2_v}"
-            )
-            tie = False
-                # Determine which model is faster and more stable
-            winner_speed = model1_speed if model1_distance == dwinner else model2_speed
-            lost_speed = model2_speed if model1_distance == dwinner else model1_speed
-            winner_stability = model1_stability if model1_distance == dwinner else model2_stability
-            lost_stability = model2_stability if model1_distance == dwinner else model1_stability
-            speed_note = (
-                "faster" if winner_speed > lost_speed else "slower" if winner_speed < lost_speed else "same"
-                )
-            stability_note = (
-                "more stable than " if winner_stability > lost_stability else "less stable than " if winner_stability < lost_stability else "equally stable compared to "
-            )
-            note = f"{winner} covers more distance with {speed_note} speed and is {stability_note}the other model."
+        tie = model1_distance == model2_distance
+        note = ''
+        
+        if not tie:
+            if model1_distance > model2_distance:
+                winner = f"{model1_name} v{model1_v}"
+                loser = f"{model_name2} v{model2_v}"
+                winner_speed, loser_speed = model1_speed, model2_speed
+                winner_stability, loser_stability = model1_stability, model2_stability
+            else:
+                winner = f"{model_name2} v{model2_v}"
+                loser = f"{model1_name} v{model1_v}"
+                winner_speed, loser_speed = model2_speed, model1_speed
+                winner_stability, loser_stability = model2_stability, model1_stability
+                
+            # Determine performance differences
+            speed_note = ("faster" if winner_speed > loser_speed 
+                         else "slower" if winner_speed < loser_speed else "same speed")
+            stability_note = ("more stable than " if winner_stability > loser_stability 
+                             else "less stable than " if winner_stability < loser_stability 
+                             else "equally stable compared to ")
+            note = f"{winner} covers more distance with {speed_note} and is {stability_note}the other model."
 
         # Show metrics
         if not fauto:
-            print(f'\n{C}✈️ Comparing → {model1_name} v{model1_v} and {model_name2} v{model2_v}:\n')
+            console.print(f'\n[cyan bold]✈️ Comparing → {model1_name} v{model1_v} and {model_name2} v{model2_v}:\n')
 
             def rich_bar(val, scale=10, max_len=40, color='white'):
                 length = max(1, min(int(val // scale), max_len))
@@ -862,14 +926,14 @@ def compare(model1_name=None, model1_v=None, model_name2=None, model2_v=None, fa
             )
 
             winner_text = Text(f"🏆 Winner → {winner}", style="bold green")
-            note_text = Text(f"✏ {note}" if not tie else '', style="italic yellow")
+            note_text = Text(f"✏ {note}" if not tie else 'Perfect tie!', style="italic yellow")
 
             panel = Panel.fit(table, title="[bold underline]Model Comparison[/]", border_style="bright_magenta", padding=(1,2))
             console.print(panel)
             console.print(winner_text)
             console.print(note_text)
         else:
-            # Proportional rich bars and proper rich color output
+            # Auto comparison for updates
             def rich_bar_auto(val, max_val, max_len=20, color='white'):
                 if max_val == 0:
                     length = 1
@@ -917,18 +981,14 @@ def compare(model1_name=None, model1_v=None, model_name2=None, model2_v=None, fa
             else:
                 console.print(f"[yellow]No improvements detected.[/]")
             
-        
-    except (csv.Error, KeyError, ValueError):
-        print(f'{R}⚠ Invalid request, {rerun_req}')
-        global breakw
-        breakw = True
+    except (csv.Error, KeyError, ValueError, FileNotFoundError) as e:
+        print(f'{R}⚠ Error comparing models: {e}, {rerun_req}')
         
 # ============== Generate Overall Report =====================
 def generate_overall():
     """
     Generate an overall report summarizing all models' metrics.
     Creates a terminal table, CSV, bar chart, and Markdown report for research papers.
-    Matches the specified research-paper-ready format with detailed insights.
     """
     base_dir = "outputs"
     report_file = os.path.join(base_dir, "overall_report.md")
@@ -938,7 +998,7 @@ def generate_overall():
     # Collect data
     records = []
     if not os.path.exists(base_dir):
-        console.print("[red bold]❌ Hangar’s empty! Fold some planes, pilot! ✈️")
+        console.print("[red bold]❌ Hangar's empty! Fold some planes, pilot! ✈️")
         return
 
     for model in os.listdir(base_dir):
@@ -959,8 +1019,8 @@ def generate_overall():
                                 "Stability": float(row["Stability"]),
                                 "Speed(m/s)": float(row["Speed(m/s)"])
                             })
-                except Exception as e:
-                    console.print(f"[red bold]❌ Crash landing! Bad metrics file at {csv_path}. Try option 1! ✈️")
+                except (ValueError, KeyError) as e:
+                    console.print(f"[red bold]❌ Bad metrics file at {csv_path}: {e}")
 
     if not records:
         console.print("[red bold]❌ No metrics found! Create models with option 1, ace! ✈️")
@@ -1009,87 +1069,93 @@ def generate_overall():
     console.print(f"[green bold]📊 Overall report saved to → {csv_file}")
 
     # Bar chart for distance
-    plt.figure(figsize=(10, 6))
-    labels = [f"{r['Model']}_v{r['Version']}" for r in records]
-    distances = [r["Distance(m)"] for r in records]
-    plt.bar(labels, distances, color="#00FFFF")
-    plt.title("Fleet Distance Comparison")
-    plt.xlabel("Model and Version")
-    plt.ylabel("Distance (m)")
-    plt.grid(True, linestyle="--", alpha=0.3)
-    plt.xticks(rotation=45, ha="right")
-    plt.tight_layout()
-    plt.savefig(chart_file)
-    plt.close()
-    console.print(f"[green bold]📉 Chart saved to → {chart_file}")
+    try:
+        plt.figure(figsize=(10, 6))
+        labels = [f"{r['Model']}_v{r['Version']}" for r in records]
+        distances = [r["Distance(m)"] for r in records]
+        plt.bar(labels, distances, color="#00FFFF")
+        plt.title("Fleet Distance Comparison")
+        plt.xlabel("Model and Version")
+        plt.ylabel("Distance (m)")
+        plt.grid(True, linestyle="--", alpha=0.3)
+        plt.xticks(rotation=45, ha="right")
+        plt.tight_layout()
+        plt.savefig(chart_file, dpi=300, bbox_inches='tight')
+        plt.close()
+        console.print(f"[green bold]📉 Chart saved to → {chart_file}")
+    except Exception as e:
+        console.print(f"[red]❌ Error generating chart: {e}")
 
     # Markdown report
     now = datetime.now().strftime("%Y-%m-%d %I:%M %p +06")
-    with open(report_file, "w", encoding="utf-8") as f:
-        f.write(f"# Overall Report\n")
-        f.write(f"*Phase Summary of Paper Aircraft Engineering Iterations*  \n")
-        f.write(f"Generated: {now}  \n\n")
-        f.write("---\n\n")
-        f.write("## 🚀 Models & Versions Overview (Sorted by Distance → Stability → Speed)\n\n")
-        f.write("| Model | Version | Avg Distance (m) | Avg Stability | Avg Speed (m/s) |\n")
-        f.write("|-------|---------|-------------------|---------------|------------------|\n")
-        for i, record in enumerate(records):
-            model_name = f"★ {record['Model']}" if i < 3 else record["Model"]
-            f.write(f"| {model_name} | {record['Version']} | {record['Distance(m)']:.2f} | {record['Stability']:.1f} | {record['Speed(m/s)']:.2f} |\n")
-        f.write("\n---\n\n")
-        f.write("## 🏆 Top Performers\n")
-        best_distance = max(records, key=lambda x: x["Distance(m)"])
-        best_stability = max(records, key=lambda x: x["Stability"])
-        best_speed = max(records, key=lambda x: x["Speed(m/s)"])
-        f.write(f"- **Longest Distance** → {best_distance['Model']} v{best_distance['Version']} ({best_distance['Distance(m)']:.2f} m) ✅\n")
-        f.write(f"- **Most Stable** → {best_stability['Model']} v{best_stability['Version']} ({best_stability['Stability']:.1f})\n")
-        f.write(f"- **Fastest Speed** → {best_speed['Model']} v{best_speed['Version']} ({best_speed['Speed(m/s)']:.2f} m/s)\n\n")
-        f.write("---\n\n")
-        f.write("## 📈 Comparative Trends\n\n")
-        f.write("### Distance Progression\n")
-        for model in set(r["Model"] for r in records):
-            model_records = [r for r in records if r["Model"] == model]
-            if len(model_records) > 1:
-                versions = sorted(model_records, key=lambda x: float(x["Version"]))
-                diff = versions[0]["Distance(m)"] - versions[-1]["Distance(m)"]
-                f.write(f"- {model} branch {'dominates with consistent gains' if diff > 0 else 'shows modest progress' if diff > -0.5 else 'stagnated'} ({'+' if diff > 0 else ''}{diff:.1f} m from v{versions[-1]['Version']} → v{versions[0]['Version']}).\n")
-            else:
-                f.write(f"- {model} branch has single version, no progression data.\n")
-        f.write("\n### Stability vs Distance\n")
-        best = records[0]
-        f.write(f"- **Best Stability Plane** → {best_stability['Model']} v{best_stability['Version']} ({best_stability['Stability']:.1f})\n")
-        f.write(f"- **Best Distance Plane** → {best_distance['Model']} v{best_distance['Version']} ({best_distance['Distance(m)']:.2f} m)\n")
-        f.write(f"- Clear correlation: distance and stability peaked together in {best['Model']} branch.\n\n")
-        f.write(f"![Fleet Distance Comparison](overall_report.png)\n\n")
-        f.write("---\n\n")
-        f.write("## 🔬 Insights\n")
-        f.write(f"- **{best['Model']} branch** = king. Strong lead in distance, stability, and speed.\n")
-        if len(records) > 1:
-            second = records[1]
-            f.write(f"- **{second['Model']} branch** = decent, but already lagging too far behind.\n")
-        if len(records) > 2:
-            worst = records[-1]
-            f.write(f"- **{worst['Model']} branch** = inefficient — cut losses here.\n")
-        f.write("- Micro-fold adjustments (seen in top performers) yield massive improvements.\n\n")
-        f.write("---\n\n")
-        f.write("## 📌 Phase Verdict\n")
-        f.write(f"- **Total Models**: {len(set(r['Model'] for r in records))}\n")
-        f.write(f"- **Total Versions Tested**: {len(records)}\n")
-        f.write(f"- **Best Candidate:** {best['Model']} v{best['Version']}\n")
-        f.write(f"- **Recommendation:** Keep pushing the *{best['Model']}* branch. {second['Model'] if len(records) > 1 else 'Other models'} can stay archived for reference. {worst['Model'] if len(records) > 2 else 'Underperforming models'} should be abandoned.\n")
-        f.write(f"- If you go way more → {best['Model']} could become the city-burner model. 🔥\n\n")
-        f.write("---\n\n")
-        f.write("## 📎 Appendices\n")
-        for record in records:
-            report_path = f"outputs/{record['Model']}/{record['Version']}/report.md"
-            if os.path.exists(report_path):
-                f.write(f"- [{record['Model']} v{record['Version']} Detailed Report]({record['Model']}/{record['Version']}/report.md)\n")
-        f.write("\n---\n\n")
-        f.write("Share this on X with **#LucidraftDeltaX** \n")
-    console.print(f"[green bold]📄 Markdown report saved to → {report_file}")
+    try:
+        with open(report_file, "w", encoding="utf-8") as f:
+            f.write(f"# Overall Report\n")
+            f.write(f"*Phase Summary of Paper Aircraft Engineering Iterations*  \n")
+            f.write(f"Generated: {now}  \n\n")
+            f.write("---\n\n")
+            f.write("## 🚀 Models & Versions Overview (Sorted by Distance → Stability → Speed)\n\n")
+            f.write("| Model | Version | Avg Distance (m) | Avg Stability | Avg Speed (m/s) |\n")
+            f.write("|-------|---------|-------------------|---------------|------------------|\n")
+            for i, record in enumerate(records):
+                model_name = f"★ {record['Model']}" if i < 3 else record["Model"]
+                f.write(f"| {model_name} | {record['Version']} | {record['Distance(m)']:.2f} | {record['Stability']:.1f} | {record['Speed(m/s)']:.2f} |\n")
+            f.write("\n---\n\n")
+            f.write("## 🏆 Top Performers\n")
+            best_distance = max(records, key=lambda x: x["Distance(m)"])
+            best_stability = max(records, key=lambda x: x["Stability"])
+            best_speed = max(records, key=lambda x: x["Speed(m/s)"])
+            f.write(f"- **Longest Distance** → {best_distance['Model']} v{best_distance['Version']} ({best_distance['Distance(m)']:.2f} m) ✅\n")
+            f.write(f"- **Most Stable** → {best_stability['Model']} v{best_stability['Version']} ({best_stability['Stability']:.1f})\n")
+            f.write(f"- **Fastest Speed** → {best_speed['Model']} v{best_speed['Version']} ({best_speed['Speed(m/s)']:.2f} m/s)\n\n")
+            f.write("---\n\n")
+            f.write("## 📈 Comparative Trends\n\n")
+            f.write("### Distance Progression\n")
+            for model in set(r["Model"] for r in records):
+                model_records = [r for r in records if r["Model"] == model]
+                if len(model_records) > 1:
+                    versions = sorted(model_records, key=lambda x: float(x["Version"]))
+                    diff = versions[0]["Distance(m)"] - versions[-1]["Distance(m)"]
+                    f.write(f"- {model} branch {'dominates with consistent gains' if diff > 0 else 'shows modest progress' if diff > -0.5 else 'stagnated'} ({'+' if diff > 0 else ''}{diff:.1f} m from v{versions[-1]['Version']} → v{versions[0]['Version']}).\n")
+                else:
+                    f.write(f"- {model} branch has single version, no progression data.\n")
+            f.write("\n### Stability vs Distance\n")
+            best = records[0]
+            f.write(f"- **Best Stability Plane** → {best_stability['Model']} v{best_stability['Version']} ({best_stability['Stability']:.1f})\n")
+            f.write(f"- **Best Distance Plane** → {best_distance['Model']} v{best_distance['Version']} ({best_distance['Distance(m)']:.2f} m)\n")
+            f.write(f"- Clear correlation: distance and stability peaked together in {best['Model']} branch.\n\n")
+            f.write(f"![Fleet Distance Comparison](overall_report.png)\n\n")
+            f.write("---\n\n")
+            f.write("## 🔬 Insights\n")
+            f.write(f"- **{best['Model']} branch** = king. Strong lead in distance, stability, and speed.\n")
+            if len(records) > 1:
+                second = records[1]
+                f.write(f"- **{second['Model']} branch** = decent, but already lagging too far behind.\n")
+            if len(records) > 2:
+                worst = records[-1]
+                f.write(f"- **{worst['Model']} branch** = inefficient — cut losses here.\n")
+            f.write("- Micro-fold adjustments (seen in top performers) yield massive improvements.\n\n")
+            f.write("---\n\n")
+            f.write("## 📌 Phase Verdict\n")
+            f.write(f"- **Total Models**: {len(set(r['Model'] for r in records))}\n")
+            f.write(f"- **Total Versions Tested**: {len(records)}\n")
+            f.write(f"- **Best Candidate:** {best['Model']} v{best['Version']}\n")
+            f.write(f"- **Recommendation:** Keep pushing the *{best['Model']}* branch. {second['Model'] if len(records) > 1 else 'Other models'} can stay archived for reference. {worst['Model'] if len(records) > 2 else 'Underperforming models'} should be abandoned.\n")
+            f.write(f"- If you go way more → {best['Model']} could become the city-burner model. 🔥\n\n")
+            f.write("---\n\n")
+            f.write("## 📎 Appendices\n")
+            for record in records:
+                report_path = f"outputs/{record['Model']}/{record['Version']}/report.md"
+                if os.path.exists(report_path):
+                    f.write(f"- [{record['Model']} v{record['Version']} Detailed Report]({record['Model']}/{record['Version']}/report.md)\n")
+            f.write("\n---\n\n")
+            f.write("Share this on X with **#LucidraftDeltaX** \n")
+        console.print(f"[green bold]📄 Markdown report saved to → {report_file}")
+    except Exception as e:
+        console.print(f"[red]❌ Error generating markdown report: {e}")
 
     # Social prompt
-    console.print("[blue bold]\n🚀 Share your fleet’s stats on X with #LucidraftDeltaX! Show the world your top planes! ✈️")
+    console.print("[blue bold]\n🚀 Share your fleet's stats on X with #LucidraftDeltaX! Show the world your top planes! ✈️")
 
 # ===== Basic Utility Funcs =======
 def draw_rectangle(img, x, y, w, h):
@@ -1118,48 +1184,60 @@ def draw_rectangle(img, x, y, w, h):
             cv.circle(overlay, center, i * 3, color, -1)
             cv.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
         cv.circle(img, center, 4, color, -1)
-    except:
-        print(f'{R}⚠ Seems like frame has failed to process, {rerun_req}')
+    except Exception as e:
+        print(f'{R}⚠ Frame processing failed: {e}, {rerun_req}')
+        global breakw
         breakw = True
 
 
-def draw_grid(img, spacing=60, color=(0, 255, 255), thickness=1, alpha=0.1): # Just draws a grid on the video to make it cool, maybe 🤷‍♂️
-    overlay = img.copy()
-    h, w = img.shape[:2]
-    for x in range(0, w, spacing):
-        cv.line(overlay, (x, 0), (x, h), color, thickness)
-    for y in range(0, h, spacing):
-        cv.line(overlay, (0, y), (w, y), color, thickness)
-    cv.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
+def draw_grid(img, spacing=60, color=(0, 255, 255), thickness=1, alpha=0.1): 
+    """Just draws a grid on the video to make it cool, maybe 🤷‍♂️"""
+    try:
+        overlay = img.copy()
+        h, w = img.shape[:2]
+        for x in range(0, w, spacing):
+            cv.line(overlay, (x, 0), (x, h), color, thickness)
+        for y in range(0, h, spacing):
+            cv.line(overlay, (0, y), (w, y), color, thickness)
+        cv.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
+    except Exception as e:
+        print(f'{R}⚠ Grid drawing failed: {e}')
 
 # RUN!
 if __name__ == "__main__":
-    while True:
-        if breakw:
-            break
-        choice = homepage()
-        if choice == "7":
-            print(
-                B + "\n------------------ Goodbye! Fly high! ✈️ --------------------\n"
-            )
-            break
-        elif choice == "1":
-            log_new_model()
-            pause()
-        elif choice == "2":
-            view_models()
-            pause()
-        elif choice == "3":
-            update_model()
-            pause()
-        elif choice == "4":
-            delete_model()
-            pause()
-        elif choice == "5":
-            compare()
-            pause()
-        elif choice == '6':
-            generate_overall()
-            pause()
-        else:
-            pause()
+    try:
+        while True:
+            if breakw:
+                break
+            choice = homepage()
+            if choice == "7":
+                print(
+                    B + "\n------------------ Goodbye! Fly high! ✈️ --------------------\n"
+                )
+                break
+            elif choice == "1":
+                log_new_model()
+                pause()
+            elif choice == "2":
+                view_models()
+                pause()
+            elif choice == "3":
+                update_model()
+                pause()
+            elif choice == "4":
+                delete_model()
+                pause()
+            elif choice == "5":
+                compare()
+                pause()
+            elif choice == '6':
+                generate_overall()
+                pause()
+            else:
+                print(f'{R}⚠ Invalid choice! Please select 1-7.')
+                pause()
+    except KeyboardInterrupt:
+        print(f"\n{Y}Program interrupted by user. Fly safe! ✈️")
+    except Exception as e:
+        print(f"\n{R}❌ Unexpected error: {e}")
+        print(f"{Y}Program crashed! Check your installation and try again. ✈️")
