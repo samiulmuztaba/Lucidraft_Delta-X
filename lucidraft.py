@@ -3,7 +3,7 @@ import re
 import cv2 as cv
 from colorama import init, Fore, Style
 import shutil
-import numpy as np
+import numpy 
 import csv
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -267,7 +267,7 @@ def log_new_model(model_name=None, model_version=1.0):
                 # Draw tracking box + trajectory
                 cv.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 if len(trajectory_points) > 1:
-                    cv.polylines(frame, [np.array(trajectory_points)], False, (0, 255, 0), 2)
+                    cv.polylines(frame, [numpy.array(trajectory_points)], False, (0, 255, 0), 2)
                 draw_grid(frame)
                 cv.putText(frame, f"{center}", (frame.shape[1]-90, frame.shape[0]-10),
                            cv.FONT_HERSHEY_DUPLEX, 0.4, (0, 255, 255), 1)
@@ -519,8 +519,8 @@ def log_new_model(model_name=None, model_version=1.0):
         # Enhanced styling and layout
         if all_x and all_y:
             # Compute limits with padding
-            all_x_array = np.array(all_x)
-            all_y_array = np.array(all_y)
+            all_x_array = numpy.array(all_x)
+            all_y_array = numpy.array(all_y)
             x_pad = (all_x_array.max() - all_x_array.min()) * 0.03
             y_pad = (all_y_array.max() - all_y_array.min()) * 0.03
             ax.set_xlim(all_x_array.min() - x_pad, all_x_array.max() + x_pad)
