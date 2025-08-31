@@ -42,8 +42,8 @@ M = Fore.MAGENTA + Style.BRIGHT
 def banner():
     logo = f"""
 {C}   ╔══════════════════════════════════════════════╗
-{C}   ║{B}   L U C I D R A F T   D E L T A - X   1 . 0  {C}║
-{C}   ║{M} Advanced Paper Plane Engineering Terminal    {C}║
+{C}   ║{B}             L U C I D R A F T                {C}║
+{C}   ║{M} Systematic Aircraft Engineering Framework    {C}║
 {C}   ╚══════════════════════════════════════════════╝
 """
     print(logo)
