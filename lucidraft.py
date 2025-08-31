@@ -75,7 +75,7 @@ def flip_x(flight):
     max_x = max(x for x, _ in flight)
     return [(max_x - x, y) for x, y in flight]
 
-def log_new_model(model_name=None, model_version=1.0):
+def log_new_model(model_name=None, model_version=1.0, update_notes=None):
     global breakw
     need = "Add" if not model_name else 'Update'
     print(C + f"\n--- {need} New Model ---\n")
@@ -90,6 +90,10 @@ def log_new_model(model_name=None, model_version=1.0):
                 return None
     
     design_notes = input(Y + "📝 Design Notes: " + W).strip()
+    
+    # Add update notes if this is an update
+    if update_notes:
+        design_notes = f"{design_notes}\n\nUPDATE NOTES (v{model_version}):\n{update_notes}"
     
     outputs_dir = os.path.join("outputs", model_name, str(model_version))
     if os.path.exists(outputs_dir):
@@ -313,12 +317,55 @@ def log_new_model(model_name=None, model_version=1.0):
             print(f"    {R}⚠ Invalid distance input. Please enter a number, {rerun_req}")
             continue
 
-        # Calculate airtime
+        # Calculate airtime - with manual input option
         if first_detected is not None and last_detected is not None:
             airtime_frames = last_detected - first_detected + 1
-            airtime = airtime_frames / fps if fps > 0 else 0
+            calculated_airtime = airtime_frames / fps if fps > 0 else 0
+            print(f"    {C}⏱️ Calculated airtime: {calculated_airtime:.2f}s (from {airtime_frames} frames at {fps:.1f} FPS)")
+            
+            # Ask user if they want to use calculated or manual airtime
+            airtime_choice = input(f"    {Y}Use calculated airtime? (y/N) or enter manual airtime in seconds: {W}").strip().lower()
+            
+            if airtime_choice == 'y' or airtime_choice == 'yes':
+                airtime = calculated_airtime
+                print(f"    {G}✅ Using calculated airtime: {airtime:.2f}s")
+            else:
+                # Try to parse as manual airtime
+                try:
+                    if airtime_choice and airtime_choice not in ['n', 'no']:
+                        # User entered a number
+                        airtime = float(airtime_choice)
+                        if airtime < 0:
+                            print(f"    {R}⚠ Airtime must be non-negative. Using calculated value.")
+                            airtime = calculated_airtime
+                        else:
+                            print(f"    {G}✅ Using manual airtime: {airtime:.2f}s")
+                    else:
+                        # User chose 'n' or 'no', ask for manual input
+                        manual_input = input(f"    {Y}Enter airtime in seconds (e.g., 2.5): {W}")
+                        airtime = float(manual_input)
+                        if airtime < 0:
+                            print(f"    {R}⚠ Airtime must be non-negative. Using calculated value.")
+                            airtime = calculated_airtime
+                        else:
+                            print(f"    {G}✅ Using manual airtime: {airtime:.2f}s")
+                except ValueError:
+                    print(f"    {R}⚠ Invalid airtime input. Using calculated value: {calculated_airtime:.2f}s")
+                    airtime = calculated_airtime
         else:
             airtime = 0
+            print(f"    {R}⚠ Could not calculate airtime from video. Please enter manually.")
+            try:
+                manual_input = input(f"    {Y}Enter airtime in seconds (e.g., 2.5): {W}")
+                airtime = float(manual_input)
+                if airtime < 0:
+                    print(f"    {R}⚠ Airtime must be non-negative. Setting to 0.")
+                    airtime = 0
+                else:
+                    print(f"    {G}✅ Using manual airtime: {airtime:.2f}s")
+            except ValueError:
+                print(f"    {R}⚠ Invalid airtime input. Setting to 0.")
+                airtime = 0
 
         # Calculate speed
         speed = distance_m / airtime if airtime > 0 else 0
@@ -682,6 +729,112 @@ def log_new_model(model_name=None, model_version=1.0):
 
     return model_name, model_version
 
+# ================= View Model ========================
+def create_combined_table(data):
+    """
+    Generates a single table with model names and versions in rows, with colors.
+    """
+    if not data or all(len(versions) == 0 for versions in data.values()):
+        return Text("No data to display.", style="red bold")
+
+    table = Table(show_header=True, header_style="bold magenta", box=box.ROUNDED, expand=True)
+    table.add_column("Model", style="cyan bold", justify="left")
+    table.add_column("Version", justify="center")
+    table.add_column("Distance (m)", justify="center")
+    table.add_column("Speed (m/s)", justify="center")
+    table.add_column("Stability", justify="center")
+
+    for model_name, versions in data.items():
+        if not versions:
+            continue  # Skip models with no version data
+        for i, version in enumerate(versions):
+            table.add_row(
+                model_name if i == 0 else "",
+                version['version'],
+                f"[green]{version['distance']}[/]",
+                f"[yellow]{version['speed']}[/]",
+                f"[cyan]{version['stability']}[/]"
+            )
+        table.add_row("", "", "", "", "", end_section=True)
+
+    return table
+
+def view_models():
+    console.print(f'[yellow bold]\n--------- View Models --------\n')
+    outb = 'outputs'
+    models = {}
+
+    if not os.path.exists(outb):
+        console.print("[red bold]❌ No models found! Create some planes first! ✈️")
+        return models
+
+    for model_name in os.listdir(outb):
+        model_path = os.path.join(outb, model_name)
+        if os.path.isdir(model_path):
+            models[model_name] = []
+            for version in os.listdir(model_path):
+                version_path = os.path.join(model_path, version, 'avg_metrics.csv')
+                if os.path.exists(version_path):
+                    try:
+                        with open(version_path, 'r', encoding='utf-8') as f:
+                            reader = csv.DictReader(f)
+                            for row in reader:
+                                models[model_name].append({
+                                    'version': str(version),
+                                    'distance': f"{float(row['Distance(m)']):.2f}",
+                                    'speed': f"{float(row['Speed(m/s)']):.2f}",
+                                    'stability': f"{float(row['Stability']):.2f}"
+                                })
+                    except (ValueError, KeyError) as e:
+                        console.print(f"[red]❌ Error reading metrics for {model_name} v{version}: {e}")
+
+    console.print(create_combined_table(models))
+    return models
+
+# =================== Update Model ======================
+def get_prev_v(model_name):
+    model_path = os.path.join('outputs', model_name)
+    if not os.path.exists(model_path):
+        return None
+    vs = []
+    for v in os.listdir(model_path):
+        try:
+            vs.append(float(v))
+        except ValueError:
+            continue
+    
+    return max(vs) if vs else None
+
+
+def update_model():
+    model_name = input(f'\n{Y}Model Name: {W}').strip()
+    if not model_name:
+        print(f'{R}⚠ Please provide a valid model name, {rerun_req}')
+        return
+    if not os.path.exists(f'outputs/{model_name}'):
+        print(f'{R}⚠ No models found! Please first create one, then update if needed')
+    else:
+        # Ask for what changes were made
+        print(f'\n{C}--- Update Notes for {model_name} ---')
+        print(f'{Y}Please describe what changes you made to this model:')
+        print(f'{W}(Examples: "Added wingtips", "Increased wing dihedral", "Changed weight distribution", etc.)')
+        update_notes = input(f'{Y}📝 Update Notes: {W}').strip()
+        
+        if not update_notes:
+            update_notes = "No specific changes documented"
+            print(f'{M}⚠ No update notes provided. Using default note.')
+        
+        prev_version = get_prev_v(model_name)
+        if prev_version is None:
+            print(f'{R}⚠ No valid versions found for model {model_name}')
+            return
+        new_version = round(prev_version + 0.1, 1)
+        
+        print(f'{G}✨ Creating {model_name} v{new_version} with update notes...')
+        result = log_new_model(model_name, new_version, update_notes)
+        if result:
+            compare(model_name, prev_version, model_name, new_version, fauto=True)
+    
 # ================= View Model ========================
 def create_combined_table(data):
     """
