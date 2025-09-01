@@ -20,10 +20,7 @@ from collections import deque
 from matplotlib import cm
 import seaborn as sns
 
-
-
 console = Console()
-
 
 init(autoreset=True) # after each prompt, go back to homepage
 init(convert=True, strip=False)
@@ -37,6 +34,10 @@ G = Fore.GREEN + Style.BRIGHT
 R = Fore.RED + Style.BRIGHT
 M = Fore.MAGENTA + Style.BRIGHT
 
+# Demo data - users can type 'demo' to use these
+DEMO_VIDEOS = ["demo_flight1.mp4", "demo_flight2.mp4"]  
+DEMO_PICTURE = "demo_aircraft.jpg" 
+DEMO_DESIGN_NOTES = "Classic dart design with 45-degree fold, optimized for distance. Reinforced nose for stability."
 
 # ==== Main Homepage ====
 def banner():
@@ -47,7 +48,6 @@ def banner():
 {C}   ╚══════════════════════════════════════════════╝
 """
     print(logo)
-
 
 def pause():
     input(W + "\nPress any key to return to the homepage...")
@@ -79,17 +79,24 @@ def log_new_model(model_name=None, model_version=1.0, update_notes=None):
     global breakw
     need = "Add" if not model_name else 'Update'
     print(C + f"\n--- {need} New Model ---\n")
+    print(Y + "💡 Tip: Type 'demo' for any input to use demo data for testing!")
 
     # ---- Take important inputs ------
     if not model_name:
         model_name = input(Y + "✈  Model Name: " + W).strip()
-        if not model_name:
+        if model_name.lower() == 'demo':
+            model_name = "DemoAircraft"
+            print(G + f"✅ Using demo model name: {model_name}")
+        elif not model_name:
             model_name = input(f'{R}⚠ Please provide a name which is a text and not a falsy value: {W}')
             if not model_name:
                 print(f'{R}🤦 You entered wrong name again! {rerun_req}')
                 return None
     
     design_notes = input(Y + "📝 Design Notes: " + W).strip()
+    if design_notes.lower() == 'demo':
+        design_notes = DEMO_DESIGN_NOTES
+        print(G + f"✅ Using demo design notes")
     
     # Add update notes if this is an update
     if update_notes:
@@ -114,8 +121,17 @@ def log_new_model(model_name=None, model_version=1.0, update_notes=None):
         print(f'{R}⚠  Dude, will you never provide a valid path?')
 
     in_picture_path = input(Y + "🖼  Model's Picture: " + W).strip()
+    if in_picture_path.lower() == 'demo':
+        in_picture_path = DEMO_PICTURE
+        print(G + f"✅ Using demo picture: {DEMO_PICTURE}")
+        
     picture_path = os.path.join(outputs_dir, "model_picture.jpg")
+    
     in_videos_path = input(Y + "🎥 Flight Videos (comma separated): " + W).strip()
+    if in_videos_path.lower() == 'demo':
+        in_videos_path = ",".join(DEMO_VIDEOS)
+        print(G + f"✅ Using demo videos: {', '.join(DEMO_VIDEOS)}")
+        
     videos_dir = os.path.join(outputs_dir, "Flight Videos")
     os.makedirs(videos_dir, exist_ok=True)
     os.makedirs(os.path.dirname(picture_path), exist_ok=True)
@@ -125,21 +141,20 @@ def log_new_model(model_name=None, model_version=1.0, update_notes=None):
         img = cv.imread(in_picture_path)
         if img is not None:
             cv.imwrite(picture_path, img)
-            print(G + f"\n✅ Picture saved → {picture_path}")
+            print(G + f"✅ Picture saved → {picture_path}")
         else:
-            print(R + f"\n❌ Error: Could not read image from '{in_picture_path}'")
+            print(R + f"❌ Error: Could not read image from '{in_picture_path}'")
     elif in_picture_path:
-        print(R + f"\n❌ Error: Image path '{in_picture_path}' does not exist.")
+        print(R + f"❌ Error: Image path '{in_picture_path}' does not exist.")
         retry_path = input(f"{Y}📷 Please enter a valid picture path (or press Enter to skip): {W}").strip()
         if retry_path and os.path.exists(retry_path):
             cv.imwrite(picture_path, cv.imread(retry_path))
-            print(G + f"\n✅ Picture saved → {picture_path}")
+            print(G + f"✅ Picture saved → {picture_path}")
         elif retry_path:
             path_validation_msg()
 
     # Parse and validate video paths, removing duplicates
     video_paths = list(dict.fromkeys([v.strip() for v in in_videos_path.split(",") if v.strip()])) if in_videos_path else []
-    print(f"{Y}📹 Processing video paths: {video_paths}")
 
     if not video_paths:
         print(f"{R}❌ No valid video paths provided. Please provide at least one valid video.")
@@ -301,7 +316,6 @@ def log_new_model(model_name=None, model_version=1.0, update_notes=None):
                 for x, y in trajectory_points:
                     writer.writerow([x, y])
             print(f"    {G}📈 Flight Trajectory Coordinates saved to {coordinates_path_f}")
-            print(f"    {Y}Debug: Saved {len(trajectory_points)} points for {video_n}")
         except Exception as e:
             print(f"{R}❌ Error saving coordinates to {coordinates_path_f}: {e}")
             continue
@@ -309,10 +323,14 @@ def log_new_model(model_name=None, model_version=1.0, update_notes=None):
         # Prompt user for distance in meters
         try:
             distance_input = input(f"    {C}📏 Enter flight distance for {video_n} in meters (e.g., 10.5): {W}")
-            distance_m = float(distance_input)
-            if distance_m < 0:
-                print(f"    {R}⚠ Distance must be non-negative. Setting to 0.")
-                distance_m = 0
+            if distance_input.lower() == 'demo':
+                distance_m = 8.5 if video_no == 1 else 9.2  # Demo values
+                print(f"    {G}✅ Using demo distance: {distance_m}m")
+            else:
+                distance_m = float(distance_input)
+                if distance_m < 0:
+                    print(f"    {R}⚠ Distance must be non-negative. Setting to 0.")
+                    distance_m = 0
         except ValueError:
             print(f"    {R}⚠ Invalid distance input. Please enter a number, {rerun_req}")
             continue
@@ -326,7 +344,10 @@ def log_new_model(model_name=None, model_version=1.0, update_notes=None):
             # Ask user if they want to use calculated or manual airtime
             airtime_choice = input(f"    {Y}Use calculated airtime? (y/N) or enter manual airtime in seconds: {W}").strip().lower()
             
-            if airtime_choice == 'y' or airtime_choice == 'yes':
+            if airtime_choice == 'demo':
+                airtime = 3.2 if video_no == 1 else 3.8  # Demo values
+                print(f"    {G}✅ Using demo airtime: {airtime:.2f}s")
+            elif airtime_choice == 'y' or airtime_choice == 'yes':
                 airtime = calculated_airtime
                 print(f"    {G}✅ Using calculated airtime: {airtime:.2f}s")
             else:
@@ -343,12 +364,16 @@ def log_new_model(model_name=None, model_version=1.0, update_notes=None):
                     else:
                         # User chose 'n' or 'no', ask for manual input
                         manual_input = input(f"    {Y}Enter airtime in seconds (e.g., 2.5): {W}")
-                        airtime = float(manual_input)
-                        if airtime < 0:
-                            print(f"    {R}⚠ Airtime must be non-negative. Using calculated value.")
-                            airtime = calculated_airtime
+                        if manual_input.lower() == 'demo':
+                            airtime = 3.2 if video_no == 1 else 3.8
+                            print(f"    {G}✅ Using demo airtime: {airtime:.2f}s")
                         else:
-                            print(f"    {G}✅ Using manual airtime: {airtime:.2f}s")
+                            airtime = float(manual_input)
+                            if airtime < 0:
+                                print(f"    {R}⚠ Airtime must be non-negative. Using calculated value.")
+                                airtime = calculated_airtime
+                            else:
+                                print(f"    {G}✅ Using manual airtime: {airtime:.2f}s")
                 except ValueError:
                     print(f"    {R}⚠ Invalid airtime input. Using calculated value: {calculated_airtime:.2f}s")
                     airtime = calculated_airtime
@@ -357,12 +382,16 @@ def log_new_model(model_name=None, model_version=1.0, update_notes=None):
             print(f"    {R}⚠ Could not calculate airtime from video. Please enter manually.")
             try:
                 manual_input = input(f"    {Y}Enter airtime in seconds (e.g., 2.5): {W}")
-                airtime = float(manual_input)
-                if airtime < 0:
-                    print(f"    {R}⚠ Airtime must be non-negative. Setting to 0.")
-                    airtime = 0
+                if manual_input.lower() == 'demo':
+                    airtime = 3.2 if video_no == 1 else 3.8
+                    print(f"    {G}✅ Using demo airtime: {airtime:.2f}s")
                 else:
-                    print(f"    {G}✅ Using manual airtime: {airtime:.2f}s")
+                    airtime = float(manual_input)
+                    if airtime < 0:
+                        print(f"    {R}⚠ Airtime must be non-negative. Setting to 0.")
+                        airtime = 0
+                    else:
+                        print(f"    {G}✅ Using manual airtime: {airtime:.2f}s")
             except ValueError:
                 print(f"    {R}⚠ Invalid airtime input. Setting to 0.")
                 airtime = 0
@@ -373,13 +402,17 @@ def log_new_model(model_name=None, model_version=1.0, update_notes=None):
         # Take the stability score as input from user
         try:
             stability_input = input(f"    {C}📝 Enter stability score for {model_name} (0-10): {W}")
-            stability_score = float(stability_input)
-            if stability_score > 10:
-                print(f"    {M} We understand you might be amused of its stability, bro just go with 10 if you like it then! The good news though, you don't have to because we will count it as 10.")
-                stability_score = 10
-            elif stability_score < 0:
-                print(f'    {M} Bruh, did that fly that bad? But you are only allowed to enter in range of 0 to 10. We will take that as 0, btw!')
-                stability_score = 0
+            if stability_input.lower() == 'demo':
+                stability_score = 7.5 if video_no == 1 else 8.0  # Demo values
+                print(f"    {G}✅ Using demo stability: {stability_score}")
+            else:
+                stability_score = float(stability_input)
+                if stability_score > 10:
+                    print(f"    {M} We understand you might be amused of its stability, bro just go with 10 if you like it then! The good news though, you don't have to because we will count it as 10.")
+                    stability_score = 10
+                elif stability_score < 0:
+                    print(f'    {M} Bruh, did that fly that bad? But you are only allowed to enter in range of 0 to 10. We will take that as 0, btw!')
+                    stability_score = 0
         except ValueError:
             print(f'    {R}⚠ Only numbers between 0 and 10 are allowed, {rerun_req}')
             continue
@@ -470,9 +503,6 @@ def log_new_model(model_name=None, model_version=1.0, update_notes=None):
                             points.append((float(row["X"]), float(row["Y"])))
                     if points:
                         all_trajectories.append(points)
-                        print(f"{Y}Debug: Loaded {len(points)} points from {filename}")
-                    else:
-                        print(f"{R}⚠ Warning: No points loaded from {filename}")
                 except Exception as e:
                     print(f"{R}❌ Error reading coordinates file {filepath}: {e}")
                     continue
@@ -481,7 +511,6 @@ def log_new_model(model_name=None, model_version=1.0, update_notes=None):
     if all_trajectories:
         min_length = min(len(traj) for traj in all_trajectories)
         num_videos = len(all_trajectories)
-        print(f"{Y}Debug: Calculating average trajectory from {num_videos} trajectories with min length {min_length}")
         for i in range(min_length):
             avg_x = sum(traj[i][0] for traj in all_trajectories) / num_videos
             avg_y = sum(traj[i][1] for traj in all_trajectories) / num_videos
@@ -514,7 +543,6 @@ def log_new_model(model_name=None, model_version=1.0, update_notes=None):
         if os.path.exists(coordinates_path):
             filenames = [f for f in os.listdir(coordinates_path) if f.endswith("_coordinates.csv")]
             num_trajectories = len(filenames)
-            print(f"{Y}Debug: Plotting {num_trajectories} trajectories with enhanced dark mode")
 
             for idx, filename in enumerate(sorted(filenames)):
                 filepath = os.path.join(coordinates_path, filename)
@@ -715,7 +743,7 @@ def log_new_model(model_name=None, model_version=1.0, update_notes=None):
             f.write('\n')
 
             f.write('## Summary\n')
-            f.write(f'- {"Best distance" if is_best_distance else "Great distance coverage" if avg_distance > 50 else "The distance is not satisfying!"}\n')
+            f.write(f'- {"Best distance" if is_best_distance else "Great distance coverage" if avg_distance > 5 else "The distance is not satisfying!"}\n')
             f.write(f'- {"Really Stable" if is_most_stable else "Strong stability" if avg_stability > 7 else "Fairly stable" if avg_stability > 5 else "Unacceptably bad stability, please consider optimal weight distribution and add dihedral"}\n')
             f.write('\n---\n')
             f.write('**Share your findings on X with #LucidraftDeltaX to discuss with the research community! 🚀**\n')
@@ -805,7 +833,6 @@ def get_prev_v(model_name):
     
     return max(vs) if vs else None
 
-
 def update_model():
     model_name = input(f'\n{Y}Model Name: {W}').strip()
     if not model_name:
@@ -813,121 +840,31 @@ def update_model():
         return
     if not os.path.exists(f'outputs/{model_name}'):
         print(f'{R}⚠ No models found! Please first create one, then update if needed')
-    else:
-        # Ask for what changes were made
-        print(f'\n{C}--- Update Notes for {model_name} ---')
-        print(f'{Y}Please describe what changes you made to this model:')
-        print(f'{W}(Examples: "Added wingtips", "Increased wing dihedral", "Changed weight distribution", etc.)')
-        update_notes = input(f'{Y}📝 Update Notes: {W}').strip()
-        
-        if not update_notes:
-            update_notes = "No specific changes documented"
-            print(f'{M}⚠ No update notes provided. Using default note.')
-        
-        prev_version = get_prev_v(model_name)
-        if prev_version is None:
-            print(f'{R}⚠ No valid versions found for model {model_name}')
-            return
-        new_version = round(prev_version + 0.1, 1)
-        
-        print(f'{G}✨ Creating {model_name} v{new_version} with update notes...')
-        result = log_new_model(model_name, new_version, update_notes)
-        if result:
-            compare(model_name, prev_version, model_name, new_version, fauto=True)
-    
-# ================= View Model ========================
-def create_combined_table(data):
-    """
-    Generates a single table with model names and versions in rows, with colors.
-    """
-    if not data or all(len(versions) == 0 for versions in data.values()):
-        return Text("No data to display.", style="red bold")
-
-    table = Table(show_header=True, header_style="bold magenta", box=box.ROUNDED, expand=True)
-    table.add_column("Model", style="cyan bold", justify="left")
-    table.add_column("Version", justify="center")
-    table.add_column("Distance (m)", justify="center")
-    table.add_column("Speed (m/s)", justify="center")
-    table.add_column("Stability", justify="center")
-
-    for model_name, versions in data.items():
-        if not versions:
-            continue  # Skip models with no version data
-        for i, version in enumerate(versions):
-            table.add_row(
-                model_name if i == 0 else "",
-                version['version'],
-                f"[green]{version['distance']}[/]",
-                f"[yellow]{version['speed']}[/]",
-                f"[cyan]{version['stability']}[/]"
-            )
-        table.add_row("", "", "", "", "", end_section=True)
-
-    return table
-
-def view_models():
-    console.print(f'[yellow bold]\n--------- View Models --------\n')
-    outb = 'outputs'
-    models = {}
-
-    if not os.path.exists(outb):
-        console.print("[red bold]❌ No models found! Create some planes first! ✈️")
-        return models
-
-    for model_name in os.listdir(outb):
-        model_path = os.path.join(outb, model_name)
-        if os.path.isdir(model_path):
-            models[model_name] = []
-            for version in os.listdir(model_path):
-                version_path = os.path.join(model_path, version, 'avg_metrics.csv')
-                if os.path.exists(version_path):
-                    try:
-                        with open(version_path, 'r', encoding='utf-8') as f:
-                            reader = csv.DictReader(f)
-                            for row in reader:
-                                models[model_name].append({
-                                    'version': str(version),
-                                    'distance': f"{float(row['Distance(m)']):.2f}",
-                                    'speed': f"{float(row['Speed(m/s)']):.2f}",
-                                    'stability': f"{float(row['Stability']):.2f}"
-                                })
-                    except (ValueError, KeyError) as e:
-                        console.print(f"[red]❌ Error reading metrics for {model_name} v{version}: {e}")
-
-    console.print(create_combined_table(models))
-    return models
-
-# =================== Update Model ======================
-def get_prev_v(model_name):
-    model_path = os.path.join('outputs', model_name)
-    if not os.path.exists(model_path):
-        return None
-    vs = []
-    for v in os.listdir(model_path):
-        try:
-            vs.append(float(v))
-        except ValueError:
-            continue
-    
-    return max(vs) if vs else None
-
-
-def update_model():
-    model_name = input(f'\n{Y}Model Name: {W}').strip()
-    if not model_name:
-        print(f'{R}⚠ Please provide a valid model name, {rerun_req}')
         return
-    if not os.path.exists(f'outputs/{model_name}'):
-        print(f'{R}⚠ No models found! Please first create one, then update if needed')
-    else:
-        prev_version = get_prev_v(model_name)
-        if prev_version is None:
-            print(f'{R}⚠ No valid versions found for model {model_name}')
-            return
-        new_version = round(prev_version + 0.1, 1)
-        result = log_new_model(model_name, new_version)
-        if result:
-            compare(model_name, prev_version, model_name, new_version, fauto=True)
+    
+    # Ask for what changes were made
+    print(f'\n{C}--- Update Notes for {model_name} ---')
+    print(f'{Y}Please describe what changes you made to this model:')
+    print(f'{W}(Examples: "Added wingtips", "Increased wing dihedral", "Changed weight distribution", etc.)')
+    update_notes = input(f'{Y}📝 Update Notes: {W}').strip()
+    
+    if update_notes.lower() == 'demo':
+        update_notes = "Added paper clips for weight distribution, improved nose fold for better aerodynamics"
+        print(f'{G}✅ Using demo update notes')
+    elif not update_notes:
+        update_notes = "No specific changes documented"
+        print(f'{M}⚠ No update notes provided. Using default note.')
+    
+    prev_version = get_prev_v(model_name)
+    if prev_version is None:
+        print(f'{R}⚠ No valid versions found for model {model_name}')
+        return
+    new_version = round(prev_version + 0.1, 1)
+    
+    print(f'{G}✨ Creating {model_name} v{new_version} with update notes...')
+    result = log_new_model(model_name, new_version, update_notes)
+    if result:
+        compare(model_name, prev_version, model_name, new_version, fauto=True)
 
 # ===================== Delete Model =============
 def delete_model():
