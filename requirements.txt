@@ -1,6 +1,8 @@
-opencv-python
-colorama
-numpy
-pandas
-matplotlib
-tabulate
+opencv-python==4.8.1.78
+colorama==0.4.6
+numpy==1.24.3
+matplotlib==3.7.2
+pandas==2.0.3
+rich==13.5.2
+seaborn==0.12.2
+pyinstaller==5.13.2

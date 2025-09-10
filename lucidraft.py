@@ -901,179 +901,179 @@ def delete_model():
 
 # =============== Compare Model ===============
 def compare(model1_name=None, model1_v=None, model_name2=None, model2_v=None, fauto=False):
-    if not all([model1_name, model1_v, model_name2, model2_v]):
-        try:
-            input1 = input(f"{Y} Please enter the first model's name and version (model's name <space> version): {W}").strip().split()
-            input2 = input(f"{Y} Please enter the second model's name and version (model's name <space> version): {W}").strip().split()
-            
-            if len(input1) != 2 or len(input2) != 2:
-                print(f'{R}⚠ Invalid input format, use "model_name version" (e.g., "Eagle 1.0"), {rerun_req}')
-                return
-                
-            model1_name, model1_v = input1
-            model_name2, model2_v = input2
-            
-            # Validate model names
-            if not re.match(r'^[a-zA-Z0-9_-]+$', model1_name) or not re.match(r'^[a-zA-Z0-9_-]+$', model_name2):
-                print(f'{R}⚠ Model names must be alphanumeric, underscores, or hyphens, {rerun_req}')
-                return
-            
-            # Validate versions
-            try:
-                float(model1_v)
-                float(model2_v)
-            except ValueError:
-                print(f'{R}⚠ Versions must be numbers (e.g., 1.0), {rerun_req}')
-                return
-                
-        except ValueError:
-            print(f'{R}⚠ Invalid input format, use "model_name version" (e.g., "Eagle 1.0"), {rerun_req}')
-            return
+   if not all([model1_name, model1_v, model_name2, model2_v]):
+       try:
+           input1 = input(f"{Y} Please enter the first model's name and version (model's name <space> version): {W}").strip().split()
+           input2 = input(f"{Y} Please enter the second model's name and version (model's name <space> version): {W}").strip().split()
+           
+           if len(input1) != 2 or len(input2) != 2:
+               print(f'{R}⚠ Invalid input format, use "model_name version" (e.g., "Eagle 1.0"), {rerun_req}')
+               return
+               
+           model1_name, model1_v = input1
+           model_name2, model2_v = input2
+           
+           # Validate model names
+           if not re.match(r'^[a-zA-Z0-9_-]+$', model1_name) or not re.match(r'^[a-zA-Z0-9_-]+$', model_name2):
+               print(f'{R}⚠ Model names must be alphanumeric, underscores, or hyphens, {rerun_req}')
+               return
+           
+           # Validate versions
+           try:
+               float(model1_v)
+               float(model2_v)
+           except ValueError:
+               print(f'{R}⚠ Versions must be numbers (e.g., 1.0), {rerun_req}')
+               return
+               
+       except ValueError:
+           print(f'{R}⚠ Invalid input format, use "model_name version" (e.g., "Eagle 1.0"), {rerun_req}')
+           return
 
-    try:
-        path1 = f'outputs/{model1_name}/{model1_v}/avg_metrics.csv'
-        path2 = f'outputs/{model_name2}/{model2_v}/avg_metrics.csv'
-        if not os.path.exists(path1) or not os.path.exists(path2):
-            print(f'{R}⚠ One or both models not found, {rerun_req}')
-            return
+   try:
+       path1 = f'outputs/{model1_name}/{model1_v}/avg_metrics.csv'
+       path2 = f'outputs/{model_name2}/{model2_v}/avg_metrics.csv'
+       if not os.path.exists(path1) or not os.path.exists(path2):
+           print(f'{R}⚠ One or both models not found, {rerun_req}')
+           return
 
-        # Read and store both model's metrics
-        with open(path1, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            row = next(reader, None)
-            if row is None or any(k not in row for k in ["Distance(m)", "Speed(m/s)", "Stability"]):
-                print(f'{R}⚠ Invalid metrics file {path1}, {rerun_req}')
-                return
+       # Read and store both model's metrics
+       with open(path1, 'r', encoding='utf-8') as f:
+           reader = csv.DictReader(f)
+           row = next(reader, None)
+           if row is None or any(k not in row for k in ["Distance(m)", "Speed(m/s)", "Stability"]):
+               print(f'{R}⚠ Invalid metrics file {path1}, {rerun_req}')
+               return
 
-            model1_distance = float(row["Distance(m)"])
-            model1_speed = float(row['Speed(m/s)'])
-            model1_stability = float(row["Stability"])
-        
-        with open(path2, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            row = next(reader, None)
-            if row is None or any(k not in row for k in ["Distance(m)", "Speed(m/s)", "Stability"]):
-                print(f'{R}⚠ Invalid metrics file {path2}, {rerun_req}')
-                return
-            
-            model2_distance = float(row["Distance(m)"])
-            model2_speed = float(row['Speed(m/s)'])
-            model2_stability = float(row["Stability"])
+           model1_distance = float(row["Distance(m)"])
+           model1_speed = float(row['Speed(m/s)'])
+           model1_stability = float(row["Stability"])
+       
+       with open(path2, 'r', encoding='utf-8') as f:
+           reader = csv.DictReader(f)
+           row = next(reader, None)
+           if row is None or any(k not in row for k in ["Distance(m)", "Speed(m/s)", "Stability"]):
+               print(f'{R}⚠ Invalid metrics file {path2}, {rerun_req}')
+               return
+           
+           model2_distance = float(row["Distance(m)"])
+           model2_speed = float(row['Speed(m/s)'])
+           model2_stability = float(row["Stability"])
 
-        # Compare metrics
-        winner = "No one! it's a tie!"
-        tie = model1_distance == model2_distance
-        note = ''
-        
-        if not tie:
-            if model1_distance > model2_distance:
-                winner = f"{model1_name} v{model1_v}"
-                loser = f"{model_name2} v{model2_v}"
-                winner_speed, loser_speed = model1_speed, model2_speed
-                winner_stability, loser_stability = model1_stability, model2_stability
-            else:
-                winner = f"{model_name2} v{model2_v}"
-                loser = f"{model1_name} v{model1_v}"
-                winner_speed, loser_speed = model2_speed, model1_speed
-                winner_stability, loser_stability = model2_stability, model1_stability
-                
-            # Determine performance differences
-            speed_note = ("faster" if winner_speed > loser_speed 
-                         else "slower" if winner_speed < loser_speed else "same speed")
-            stability_note = ("more stable than " if winner_stability > loser_stability 
-                             else "less stable than " if winner_stability < loser_stability 
-                             else "equally stable compared to ")
-            note = f"{winner} covers more distance with {speed_note} and is {stability_note}the other model."
+       # Compare metrics
+       winner = "No one! it's a tie!"
+       tie = model1_distance == model2_distance
+       note = ''
+       
+       if not tie:
+           if model1_distance > model2_distance:
+               winner = f"{model1_name} v{model1_v}"
+               loser = f"{model_name2} v{model2_v}"
+               winner_speed, loser_speed = model1_speed, model2_speed
+               winner_stability, loser_stability = model1_stability, model2_stability
+           else:
+               winner = f"{model_name2} v{model2_v}"
+               loser = f"{model1_name} v{model1_v}"
+               winner_speed, loser_speed = model2_speed, model1_speed
+               winner_stability, loser_stability = model2_stability, model1_stability
+               
+           # Determine performance differences
+           speed_note = ("faster" if winner_speed > loser_speed 
+                        else "slower" if winner_speed < loser_speed else "same speed")
+           stability_note = ("more stable than " if winner_stability > loser_stability 
+                            else "less stable than " if winner_stability < loser_stability 
+                            else "equally stable compared to ")
+           note = f"{winner} covers more distance with {speed_note} and is {stability_note}the other model."
 
-        # Show metrics
-        if not fauto:
-            console.print(f'\n[cyan bold]✈️ Comparing → {model1_name} v{model1_v} and {model_name2} v{model2_v}:\n')
+       # Show metrics
+       if not fauto:
+           console.print(f'\n[cyan bold]✈️ Comparing → {model1_name} v{model1_v} and {model_name2} v{model2_v}:\n')
 
-            def rich_bar(val, scale=10, max_len=40, color='white'):
-                length = max(1, min(int(val // scale), max_len))
-                bar = f"[bold {color}]" + "█" * length + "[/]"
-                return bar
+           def rich_bar(val, scale=0.5, max_len=60, color='white'):
+               length = max(1, min(int(val / scale), max_len))
+               bar = f"[bold {color}]" + "█" * length + "[/]"
+               return bar
 
-            table = Table(show_header=True, header_style="bold magenta", box=box.ROUNDED, expand=True)
-            table.add_column("Metric", justify="center", style="bold cyan")
-            table.add_column(f"{model1_name} v{model1_v}", justify="center", style="bold green")
-            table.add_column(f"{model_name2} v{model2_v}", justify="center", style="bold blue")
+           table = Table(show_header=True, header_style="bold magenta", box=box.ROUNDED, expand=True)
+           table.add_column("Metric", justify="center", style="bold cyan")
+           table.add_column(f"{model1_name} v{model1_v}", justify="center", style="bold green")
+           table.add_column(f"{model_name2} v{model2_v}", justify="center", style="bold blue")
 
-            table.add_row(
-                "Distance (m)",
-                f"{rich_bar(model1_distance, color='green')}\n[green]{model1_distance:.2f}[/]",
-                f"{rich_bar(model2_distance, color='blue')}\n[blue]{model2_distance:.2f}[/]"
-            )
-            table.add_row(
-                "Speed (m/s)",
-                f"{rich_bar(model1_speed, color='magenta')}\n[magenta]{model1_speed:.2f}[/]",
-                f"{rich_bar(model2_speed, color='yellow')}\n[yellow]{model2_speed:.2f}[/]"
-            )
-            table.add_row(
-                "Stability (%)",
-                f"{rich_bar(model1_stability, scale=1, max_len=10, color='cyan')}\n[cyan]{model1_stability * 10:.0f}%[/]",
-                f"{rich_bar(model2_stability, scale=1, max_len=10, color='red')}\n[red]{model2_stability * 10:.0f}%[/]"
-            )
+           table.add_row(
+               "Distance (m)",
+               f"{rich_bar(model1_distance, color='green')}\n[green]{model1_distance:.2f}[/]",
+               f"{rich_bar(model2_distance, color='blue')}\n[blue]{model2_distance:.2f}[/]"
+           )
+           table.add_row(
+               "Speed (m/s)",
+               f"{rich_bar(model1_speed, color='magenta')}\n[magenta]{model1_speed:.2f}[/]",
+               f"{rich_bar(model2_speed, color='yellow')}\n[yellow]{model2_speed:.2f}[/]"
+           )
+           table.add_row(
+               "Stability (%)",
+               f"{rich_bar(model1_stability, scale=0.2, max_len=50, color='cyan')}\n[cyan]{model1_stability * 10:.0f}%[/]",
+               f"{rich_bar(model2_stability, scale=0.2, max_len=50, color='red')}\n[red]{model2_stability * 10:.0f}%[/]"
+           )
 
-            winner_text = Text(f"🏆 Winner → {winner}", style="bold green")
-            note_text = Text(f"✏ {note}" if not tie else 'Perfect tie!', style="italic yellow")
+           winner_text = Text(f"🏆 Winner → {winner}", style="bold green")
+           note_text = Text(f"✏ {note}" if not tie else 'Perfect tie!', style="italic yellow")
 
-            panel = Panel.fit(table, title="[bold underline]Model Comparison[/]", border_style="bright_magenta", padding=(1,2))
-            console.print(panel)
-            console.print(winner_text)
-            console.print(note_text)
-        else:
-            # Auto comparison for updates
-            def rich_bar_auto(val, max_val, max_len=20, color='white'):
-                if max_val == 0:
-                    length = 1
-                else:
-                    length = max(1, int((val / max_val) * max_len))
-                return f"[bold {color}]" + "█" * length + " " * (max_len - length) + "[/]"
+           panel = Panel.fit(table, title="[bold underline]Model Comparison[/]", border_style="bright_magenta", padding=(1,2))
+           console.print(panel)
+           console.print(winner_text)
+           console.print(note_text)
+       else:
+           # Auto comparison for updates
+           def rich_bar_auto(val, max_val, max_len=40, color='white'):
+               if max_val == 0:
+                   length = 1
+               else:
+                   length = max(1, int((val / max_val) * max_len))
+               return f"[bold {color}]" + "█" * length + " " * (max_len - length) + "[/]"
 
-            # Find max values for proportional bars
-            max_distance = max(model1_distance, model2_distance)
-            max_stability = max(model1_stability, model2_stability)
-            max_speed = max(model1_speed, model2_speed)
+           # Find max values for proportional bars
+           max_distance = max(model1_distance, model2_distance)
+           max_stability = max(model1_stability, model2_stability)
+           max_speed = max(model1_speed, model2_speed)
 
-            # Improvement logic
-            def metric_change(new, prev, unit, up_good=True):
-                if new > prev:
-                    return f"[green]Improved (+{new-prev:.2f}{unit})[/]" if up_good else f"[red]Worse (+{new-prev:.2f}{unit})[/]"
-                elif new < prev:
-                    return f"[red]Worse ({new-prev:.2f}{unit})[/]" if up_good else f"[green]Improved ({new-prev:.2f}{unit})[/]"
-                else:
-                    return "[yellow]No change[/]"
+           # Improvement logic
+           def metric_change(new, prev, unit, up_good=True):
+               if new > prev:
+                   return f"[green]Improved (+{new-prev:.2f}{unit})[/]" if up_good else f"[red]Worse (+{new-prev:.2f}{unit})[/]"
+               elif new < prev:
+                   return f"[red]Worse ({new-prev:.2f}{unit})[/]" if up_good else f"[green]Improved ({new-prev:.2f}{unit})[/]"
+               else:
+                   return "[yellow]No change[/]"
 
-            console.print(f"\n[bold cyan]✈️ Comparing → {model1_name} v{model1_v} and {model_name2} v{model2_v}[/]\n")
-            console.print(f"[bold yellow]Distance:[/]")
-            console.print(f"Prev {rich_bar_auto(model1_distance, max_distance, color='green')} [green]{model1_distance:.2f}m[/]")
-            console.print(f"New  {rich_bar_auto(model2_distance, max_distance, color='magenta')} [magenta]{model2_distance:.2f}m[/]  {metric_change(model2_distance, model1_distance, 'm', up_good=True)}")
+           console.print(f"\n[bold cyan]✈️ Comparing → {model1_name} v{model1_v} and {model_name2} v{model2_v}[/]\n")
+           console.print(f"[bold yellow]Distance:[/]")
+           console.print(f"Prev {rich_bar_auto(model1_distance, max_distance, color='green')} [green]{model1_distance:.2f}m[/]")
+           console.print(f"New  {rich_bar_auto(model2_distance, max_distance, color='magenta')} [magenta]{model2_distance:.2f}m[/]  {metric_change(model2_distance, model1_distance, 'm', up_good=True)}")
 
-            console.print(f"[bold yellow]Stability:[/]")
-            console.print(f"Prev {rich_bar_auto(model1_stability, max_stability, color='cyan')} [cyan]{model1_stability * 10:.0f}%[/]")
-            console.print(f"New  {rich_bar_auto(model2_stability, max_stability, color='red')} [red]{model2_stability * 10:.0f}%[/]  {metric_change(model2_stability, model1_stability, '%', up_good=True)}")
+           console.print(f"[bold yellow]Stability:[/]")
+           console.print(f"Prev {rich_bar_auto(model1_stability, max_stability, color='cyan')} [cyan]{model1_stability * 10:.0f}%[/]")
+           console.print(f"New  {rich_bar_auto(model2_stability, max_stability, color='red')} [red]{model2_stability * 10:.0f}%[/]  {metric_change(model2_stability, model1_stability, '%', up_good=True)}")
 
-            console.print(f"[bold yellow]Speed:[/]")
-            console.print(f"Prev {rich_bar_auto(model1_speed, max_speed, color='yellow')} [yellow]{model1_speed:.2f}m/s[/]")
-            console.print(f"New  {rich_bar_auto(model2_speed, max_speed, color='blue')} [blue]{model2_speed:.2f}m/s[/]  {metric_change(model2_speed, model1_speed, 'm/s', up_good=True)}")
+           console.print(f"[bold yellow]Speed:[/]")
+           console.print(f"Prev {rich_bar_auto(model1_speed, max_speed, color='yellow')} [yellow]{model1_speed:.2f}m/s[/]")
+           console.print(f"New  {rich_bar_auto(model2_speed, max_speed, color='blue')} [blue]{model2_speed:.2f}m/s[/]  {metric_change(model2_speed, model1_speed, 'm/s', up_good=True)}")
 
-            # Show summary note if any metric improved
-            summary = []
-            if model2_distance > model1_distance:
-                summary.append("Distance improved")
-            if model2_stability > model1_stability:
-                summary.append("Stability improved")
-            if model2_speed > model1_speed:
-                summary.append("Speed improved")
-            if summary:
-                console.print(f"[bold green]Summary: {', '.join(summary)}[/]")
-            else:
-                console.print(f"[yellow]No improvements detected.[/]")
-            
-    except (csv.Error, KeyError, ValueError, FileNotFoundError) as e:
-        print(f'{R}⚠ Error comparing models: {e}, {rerun_req}')
-        
+           # Show summary note if any metric improved
+           summary = []
+           if model2_distance > model1_distance:
+               summary.append("Distance improved")
+           if model2_stability > model1_stability:
+               summary.append("Stability improved")
+           if model2_speed > model1_speed:
+               summary.append("Speed improved")
+           if summary:
+               console.print(f"[bold green]Summary: {', '.join(summary)}[/]")
+           else:
+               console.print(f"[yellow]No improvements detected.[/]")
+           
+   except (csv.Error, KeyError, ValueError, FileNotFoundError) as e:
+       print(f'{R}⚠ Error comparing models: {e}, {rerun_req}')
+               
 # ============== Generate Overall Report =====================
 def generate_overall():
     """
