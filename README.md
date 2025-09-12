@@ -1,7 +1,7 @@
 
 
 # Lucidraft
-
+![./Lucidraft Banner.png](https://raw.githubusercontent.com/samiulmuztaba/Lucidraft_Delta-X/refs/heads/main/Lucidraft%20Banner.png)
 
 **Lucidraft** is a command-line tool for logging, analyzing, and comparing the flight performance of paper aircraft models using your own flight videos and images. It is menu-driven and interactive, but you must provide your own files and follow the prompts.
 
